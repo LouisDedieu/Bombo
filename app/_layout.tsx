@@ -1,24 +1,65 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
+import '../styles/global.css';
+
+import { useEffect } from 'react';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { Toaster } from 'sonner-native';
+import { AuthProvider } from '../context/AuthContext';
+import { useAuthGuardState, LoadingScreen, NetworkErrorScreen, EmailPendingScreen } from '../components/AuthGuard';
+import DebugPanel from '../components/DebugPanel';
+import { useCallback, useState } from 'react';
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
+function AuthGate({ onRetry }: { onRetry: () => void }) {
+  const { group, isPasswordRecovery } = useAuthGuardState();
+  const router = useRouter();
+  const segments = useSegments();
 
-export const unstable_settings = {
-  anchor: '(tabs)',
-};
+  useEffect(() => {
+    if (group === 'loading') return;
 
-export default function RootLayout() {
-  const colorScheme = useColorScheme();
+    const inTabs = segments[0] === '(tabs)';
+
+    if (group === 'network_error') return; // géré via rendu conditionnel
+    if (group === 'email_pending') return; // idem
+
+    if (group === 'auth' && inTabs) {
+      router.replace('/login');
+    } else if (group === 'main' && isPasswordRecovery) {
+      router.replace('/reset-password');
+    } else if (group === 'main' && !inTabs) {
+      router.replace('/');
+    }
+  }, [group, isPasswordRecovery, segments]);
+
+  if (group === 'loading') return <LoadingScreen />;
+  if (group === 'network_error') return <NetworkErrorScreen onRetry={onRetry} />;
+  if (group === 'email_pending') return <EmailPendingScreen />;
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="login" />
+      <Stack.Screen name="reset-password" />
+      <Stack.Screen name="+not-found" />
+    </Stack>
+  );
+}
+
+export default function RootLayout() {
+  const [retryKey, setRetryKey] = useState(0);
+  const handleRetry = useCallback(() => setRetryKey((k) => k + 1), []);
+
+  return (
+    <SafeAreaProvider>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#000000' }}>
+        <StatusBar style="light" />
+        <AuthProvider key={retryKey}>
+          <AuthGate onRetry={handleRetry} />
+          <Toaster position="top-center" />
+          {__DEV__ && <DebugPanel />}
+        </AuthProvider>
+      </SafeAreaView>
+    </SafeAreaProvider>
   );
 }

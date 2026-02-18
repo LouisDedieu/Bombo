@@ -1,0 +1,358 @@
+/**
+ * components/AddTripModal.tsx — React Native / Expo (NativeWind)
+ *
+ * Parité fonctionnelle avec la version React :
+ * - useUserId() + useAuth() pour l'utilisateur connecté
+ * - Passage de l'user_id à analyze()
+ * - Affichage de l'email dans l'en-tête
+ * - Variantes de statut SSE (pending → downloading → analyzing → done → error)
+ * - Barre de progression animée
+ * - Bouton "Tester avec données d'exemple"
+ * - Fermeture propre (reset URL + erreur)
+ */
+
+import { useState, useEffect, useRef } from 'react';
+import {
+  Modal,
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
+  Animated,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+} from 'react-native';
+import { useRouter } from 'expo-router';
+import {
+  X,
+  Link as LinkIcon,
+  Loader2,
+  AlertCircle,
+  Sparkles,
+  TestTube,
+  User,
+} from 'lucide-react-native';
+import { Button } from './Button';
+import { useVideoAnalysis } from '@/services/analysisService';
+import { useAuth, useUserId } from '@/context/AuthContext';
+import Toast from 'react-native-toast-message';
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+const STATUS_LABELS: Record<string, string> = {
+  pending:     'En attente...',
+  downloading: 'Téléchargement de la vidéo...',
+  analyzing:   'Analyse par IA en cours...',
+  done:        'Finalisation...',
+  error:       'Erreur',
+};
+
+const validateUrl = (value: string) =>
+  /tiktok\.com/i.test(value) || /instagram\.com\/reel/i.test(value);
+
+// ---------------------------------------------------------------------------
+// Props
+// ---------------------------------------------------------------------------
+
+interface AddTripModalProps {
+  isOpen:  boolean;
+  onClose: () => void;
+}
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+
+export default function AddTripModal({ isOpen, onClose }: AddTripModalProps) {
+  const router = useRouter();
+
+  const [url,             setUrl]             = useState('');
+  const [validationError, setValidationError] = useState('');
+
+  const userId     = useUserId();
+  const { user }   = useAuth();
+
+  const {
+    analyze,
+    isAnalyzing,
+    progress,
+    status,
+    error: analysisError,
+    result,
+  } = useVideoAnalysis();
+
+  // Animated width for the progress bar (0 → 1)
+  const progressAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(progressAnim, {
+      toValue:         progress / 100,
+      duration:        300,
+      useNativeDriver: false,
+    }).start();
+  }, [progress]);
+
+  /**
+   * Mirrors the web useEffect:
+   * - trip_id présent → naviguer vers le détail
+   * - trip_id absent  → affichage local
+   */
+  useEffect(() => {
+    if (!result) return;
+
+    if (result.trip_id) {
+      Toast.show({ type: 'success', text1: 'Itinéraire extrait avec succès !' });
+      onClose();
+      router.push(`/trips/${result.trip_id}`);
+    } else {
+      Toast.show({
+        type:  'success',
+        text1: 'Analyse terminée (affichage local, non sauvegardé)',
+      });
+      onClose();
+      router.push({ pathname: '/analysis/local', params: { trip: JSON.stringify(result) } });
+    }
+  }, [result, router, onClose]);
+
+  // ── Handlers ──────────────────────────────────────────────────────────────
+
+  const handleSubmit = async () => {
+    setValidationError('');
+
+    if (!url.trim()) {
+      setValidationError('Veuillez saisir une URL');
+      return;
+    }
+    if (!validateUrl(url)) {
+      setValidationError('URL invalide. Utilisez un lien TikTok ou Instagram Reel');
+      return;
+    }
+    if (!userId) {
+      setValidationError('Vous devez être connecté pour analyser une vidéo');
+      Toast.show({ type: 'error', text1: 'Utilisateur non connecté' });
+      return;
+    }
+
+    try {
+      await analyze(url, userId);
+    } catch (err: any) {
+      console.error("Erreur d'analyse:", err);
+    }
+  };
+
+  const handleTestWithMockData = async () => {
+    try {
+      await new Promise(r => setTimeout(r, 1_000));
+      Toast.show({ type: 'success', text1: 'Itinéraire de test chargé !' });
+      onClose();
+    } catch {
+      Toast.show({ type: 'error', text1: 'Erreur lors du chargement des données de test' });
+    }
+  };
+
+  const handleClose = () => {
+    setUrl('');
+    setValidationError('');
+    onClose();
+  };
+
+  const displayError = validationError || analysisError || '';
+  const isDisabled   = isAnalyzing || !url.trim() || !userId;
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+
+  return (
+    <Modal
+      visible={isOpen}
+      transparent
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={handleClose}
+    >
+      {/* Backdrop */}
+      <Pressable
+        className="flex-1 items-center justify-center bg-black/80 px-4"
+        onPress={handleClose}
+      >
+        {/* Card — stopPropagation so inner taps don't close */}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          className="w-full max-w-md"
+        >
+          <Pressable onPress={e => e.stopPropagation()}>
+            <View className="bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden w-full">
+
+              {/* ── Header ────────────────────────────────────────────────── */}
+              <View className="flex-row items-center justify-between p-6 border-b border-zinc-800">
+                <View className="flex-row items-center gap-3">
+                  {/* Gradient avatar — LinearGradient alternative via bg + opacity trick */}
+                  <View className="w-10 h-10 rounded-full bg-blue-600 items-center justify-center">
+                    <Sparkles size={20} color="#ffffff" />
+                  </View>
+                  <View>
+                    <Text className="text-xl font-bold text-white">Analyser une vidéo</Text>
+                    <Text className="text-sm text-zinc-400">TikTok ou Instagram Reel</Text>
+                  </View>
+                </View>
+
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onPress={handleClose}
+                  className="text-zinc-400"
+                >
+                  <X size={20} color="#a1a1aa" />
+                </Button>
+              </View>
+
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                contentContainerClassName="pb-2"
+              >
+                {/* ── Utilisateur connecté ──────────────────────────────── */}
+                {user && (
+                  <View className="flex-row items-center gap-2 px-6 pt-4 pb-2">
+                    <User size={12} color="#71717a" />
+                    <Text className="text-xs text-zinc-400">
+                      Connecté en tant que{' '}
+                      <Text className="font-semibold text-zinc-300">{user.email}</Text>
+                    </Text>
+                  </View>
+                )}
+
+                {/* ── Formulaire ────────────────────────────────────────── */}
+                <View className="p-6 gap-4">
+
+                  {/* URL input */}
+                  <View className="gap-2">
+                    <Text className="text-sm font-medium text-zinc-300">
+                      URL de la vidéo
+                    </Text>
+                    <View className="relative flex-row items-center bg-zinc-800 border border-zinc-700 rounded-lg">
+                      <View className="absolute left-3 z-10">
+                        <LinkIcon size={20} color="#71717a" />
+                      </View>
+                      <TextInput
+                        value={url}
+                        onChangeText={v => { setUrl(v); setValidationError(''); }}
+                        placeholder="https://www.tiktok.com/@user/video/..."
+                        placeholderTextColor="#52525b"
+                        keyboardType="url"
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        editable={!isAnalyzing}
+                        className="flex-1 text-white text-sm py-3 pl-10 pr-3"
+                      />
+                    </View>
+                  </View>
+
+                  {/* Error */}
+                  {!!displayError && (
+                    <View className="flex-row items-start gap-2 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+                      <AlertCircle size={20} color="#f87171" className="shrink-0 mt-0.5" />
+                      <Text className="text-sm text-red-300 flex-1">{displayError}</Text>
+                    </View>
+                  )}
+
+                  {/* Progress */}
+                  {isAnalyzing && (
+                    <View className="gap-3">
+                      <View className="flex-row items-center gap-3">
+                        <ActivityIndicator size="small" color="#60a5fa" />
+                        <View className="flex-1">
+                          <Text className="text-sm text-white font-medium">
+                            {STATUS_LABELS[status] ?? 'Traitement en cours...'}
+                          </Text>
+                          <Text className="text-xs text-zinc-400 mt-1">
+                            {Math.round(progress)}%
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Animated progress bar */}
+                      <View className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+                        <Animated.View
+                          className="h-full bg-blue-500 rounded-full"
+                          style={{
+                            width: progressAnim.interpolate({
+                              inputRange:  [0, 1],
+                              outputRange: ['0%', '100%'],
+                            }),
+                          }}
+                        />
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Tips */}
+                  <View className="bg-zinc-800/50 rounded-lg p-4 gap-2">
+                    <Text className="text-xs text-zinc-400">
+                      💡{' '}
+                      <Text className="font-semibold text-zinc-300">Conseil :</Text>
+                      {' '}Les vidéos courtes (&lt;60s) donnent de meilleurs résultats
+                    </Text>
+                    <Text className="text-xs text-zinc-400">
+                      ⏱ L'analyse prend 2–4 minutes selon la durée de la vidéo
+                    </Text>
+                    <Text className="text-xs text-zinc-400">
+                      💾 Le voyage sera sauvegardé automatiquement dans votre compte
+                    </Text>
+                  </View>
+
+                  {/* Actions */}
+                  <View className="gap-2 pt-2">
+                    <View className="flex-row gap-3">
+                      <Button
+                        variant="outline"
+                        onPress={handleClose}
+                        className="flex-1 border-zinc-700"
+                        title="Annuler"
+                      />
+                      <Button
+                        onPress={handleSubmit}
+                        disabled={isDisabled}
+                        className="flex-1 bg-blue-600"
+                      >
+                        {isAnalyzing ? (
+                          <View className="flex-row items-center gap-2">
+                            <ActivityIndicator size="small" color="#ffffff" />
+                            <Text className="text-white text-sm font-semibold">Analyse...</Text>
+                          </View>
+                        ) : (
+                          <View className="flex-row items-center gap-2">
+                            <Sparkles size={16} color="#ffffff" />
+                            <Text className="text-white text-sm font-semibold">Analyser</Text>
+                          </View>
+                        )}
+                      </Button>
+                    </View>
+
+                    <Button
+                      variant="ghost"
+                      onPress={handleTestWithMockData}
+                      disabled={isAnalyzing}
+                      className="w-full"
+                    >
+                      <View className="flex-row items-center gap-2">
+                        <TestTube size={16} color="#a1a1aa" />
+                        <Text className="text-zinc-400 text-sm font-medium">
+                          Tester avec données d'exemple
+                        </Text>
+                      </View>
+                    </Button>
+                  </View>
+
+                </View>
+              </ScrollView>
+            </View>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Pressable>
+    </Modal>
+  );
+}

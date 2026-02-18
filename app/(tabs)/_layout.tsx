@@ -1,33 +1,78 @@
 import { Tabs } from 'expo-router';
-import React from 'react';
+import { View, Text } from 'react-native';
+import { Inbox, Map, User } from 'lucide-react-native';
 
-import { HapticTab } from '@/components/haptic-tab';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+const COLOR_ACTIVE   = '#3b82f6';
+const COLOR_INACTIVE = '#71717a';
 
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
+function TabIcon({
+                   Icon,
+                   label,
+                   focused,
+                 }: {
+  Icon: React.ComponentType<{ size?: number; color: string }>;
+  label: string;
+  focused: boolean;
+}) {
+  const color = focused ? COLOR_ACTIVE : COLOR_INACTIVE;
+  return (
+    <View style={{ alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8 }}>
+      <Icon size={24} color={color} />
+      <Text style={{ fontSize: 12, color, marginTop: 4 }}>{label}</Text>
+    </View>
+  );
+}
 
+export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
         headerShown: false,
-        tabBarButton: HapticTab,
-      }}>
+        tabBarStyle: {
+          backgroundColor: '#18181b',
+          borderTopWidth: 1,
+          borderTopColor: '#27272a',
+          height: 64,
+          paddingBottom: 8,
+          paddingTop: 8,
+        },
+        tabBarShowLabel: false,
+      }}
+    >
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+          tabBarIcon: ({ focused }) => <TabIcon Icon={Inbox} label="Inbox" focused={focused} />,
         }}
       />
       <Tabs.Screen
-        name="explore"
+        name="trips/index"
         options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
+          tabBarIcon: ({ focused }) => <TabIcon Icon={Map} label="Voyages" focused={focused} />,
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          tabBarIcon: ({ focused }) => <TabIcon Icon={User} label="Profil" focused={focused} />,
+        }}
+      />
+      <Tabs.Screen
+        name="review"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="trips/[tripId]"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="review/[tripId]"
+        options={{
+          href: null,
         }}
       />
     </Tabs>
