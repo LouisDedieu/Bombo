@@ -17,6 +17,7 @@ import {
   Alert,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   ArrowLeft, Check, MapPin, Loader2,
   Star, Clock, ExternalLink, ChevronDown, ChevronUp,
@@ -32,7 +33,7 @@ import {
   deleteSpot,
 } from '@/services/reviewService';
 import type { DbTrip, DbDay, DbSpot, SpotUpdatePayload } from '@/services/reviewService';
-import Button from '../../../components/Button';
+import Button from '@/components/Button';
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
@@ -504,6 +505,7 @@ export default function ReviewModePage() {
   const router = useRouter();
   const { tripId } = useLocalSearchParams<{ tripId: string }>();
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
 
   const [trip,        setTrip]       = useState<DbTrip | null>(null);
   const [loading,     setLoading]    = useState(true);
@@ -648,16 +650,17 @@ export default function ReviewModePage() {
       {/* web: sticky bg-zinc-900/95 backdrop-blur border-b border-zinc-800 */}
       <View
         className="bg-zinc-900 px-4 py-4"
-        style={{ borderBottomWidth: 1, borderBottomColor: '#27272a' }}
+        style={{ paddingTop: insets.top + 16, borderBottomWidth: 1, borderBottomColor: '#27272a' }}
       >
         <View className="flex-row items-center gap-3">
-          <TouchableOpacity
+          <Pressable
             onPress={() => router.back()}
-            className="p-1"
-            hitSlop={8}
+            style={{ padding: 8 }}
           >
-            <ArrowLeft size={20} color="#71717a" />
-          </TouchableOpacity>
+            <View pointerEvents="none">
+              <ArrowLeft size={24} color="#a1a1aa" />
+            </View>
+          </Pressable>
           <View className="flex-1 min-w-0">
             <Text className="text-lg font-bold text-white" numberOfLines={1}>{trip.trip_title}</Text>
             <View className="flex-row items-center gap-1 mt-0.5">

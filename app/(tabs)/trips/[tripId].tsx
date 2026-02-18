@@ -11,9 +11,11 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Linking,
-  Animated,
+  Image,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { InteractiveHeroMap } from '@/components/InteractiveHeroMap';
 import {
   ArrowLeft,
   MapPin,
@@ -183,6 +185,7 @@ type Tab = 'itinerary' | 'budget' | 'practical' | 'logistics';
 export default function TripDetailPage() {
   const router = useRouter();
   const { tripId } = useLocalSearchParams<{ tripId: string }>();
+  const insets = useSafeAreaInsets();
 
   const [trip, setTrip] = useState<FullTrip | null>(null);
   const [loading, setLoading] = useState(true);
@@ -214,7 +217,7 @@ export default function TripDetailPage() {
 
   if (loading) {
     return (
-      <View className="flex-1 bg-black items-center justify-center">
+      <View className="flex-1 bg-black items-center justify-center" style={{ paddingTop: insets.top }}>
         <ActivityIndicator size="large" color="#60a5fa" />
       </View>
     );
@@ -222,7 +225,7 @@ export default function TripDetailPage() {
 
   if (!trip || !derived) {
     return (
-      <View className="flex-1 bg-black items-center justify-center px-4">
+      <View className="flex-1 bg-black items-center justify-center px-4" style={{ paddingTop: insets.top }}>
         <Text className="text-zinc-400 text-sm mb-4">Voyage introuvable.</Text>
         <TouchableOpacity
           onPress={() => router.back()}
@@ -248,7 +251,7 @@ export default function TripDetailPage() {
       {/* ════════════════════════════════════════════
           HEADER STICKY
       ════════════════════════════════════════════ */}
-      <View className="bg-zinc-950/95 border-b border-zinc-800/80">
+      <View className="bg-zinc-950/95 border-b border-zinc-800/80" style={{ paddingTop: insets.top }}>
         <View className="max-w-2xl mx-auto px-4 py-3 flex-row items-center gap-3">
           <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2">
             <ArrowLeft size={20} color="#a1a1aa" />
@@ -318,73 +321,71 @@ export default function TripDetailPage() {
       </View>
 
       {/* ════════════════════════════════════════════
-          HERO - Placeholder for map/thumbnail
-      ════════════════════════════════════════════ */}
-      <View className="h-72 bg-zinc-950 border-b border-zinc-800">
-        <View className="w-full h-full items-center justify-center">
-          <Text className="text-zinc-600 text-sm">📍 Map placeholder</Text>
-          <Text className="text-zinc-700 text-xs mt-1">
-            {destinations.length} destination{destinations.length > 1 ? 's' : ''}
-          </Text>
-        </View>
-      </View>
-
-      {/* ════════════════════════════════════════════
-          QUICK STATS BAR
-      ════════════════════════════════════════════ */}
-      <View className="bg-zinc-900/80 border-b border-zinc-800">
-        <View className="max-w-2xl mx-auto px-4 py-3 flex-row">
-          <StatCell
-            icon={<CalendarDays size={14} color="#60a5fa" />}
-            value={`${trip.duration_days}j`}
-            label="Durée"
-          />
-          <View className="w-px bg-zinc-800 mx-2" />
-          <StatCell
-            icon={<MapPin size={14} color="#c084fc" />}
-            value={String(destinations.length)}
-            label={destinations.length > 1 ? 'Villes' : 'Ville'}
-          />
-          <View className="w-px bg-zinc-800 mx-2" />
-          <StatCell
-            icon={<Navigation size={14} color="#34d399" />}
-            value={String(totalSpots)}
-            label="Lieux"
-          />
-        </View>
-      </View>
-
-      {/* ════════════════════════════════════════════
-          CREATOR INFO (if present)
-      ════════════════════════════════════════════ */}
-      {trip.content_creator_handle && (
-        <View className="max-w-2xl mx-auto px-4 pt-4">
-          <View className="bg-zinc-900 rounded-xl border border-zinc-800 px-4 py-3 flex-row items-center gap-3">
-            <Camera size={16} color="#a1a1aa" />
-            <View className="flex-1">
-              <Text className="text-xs text-zinc-500">Créateur de contenu</Text>
-              <Text className="text-sm text-white font-medium">@{trip.content_creator_handle}</Text>
-            </View>
-            {trip.source_url && (
-              <TouchableOpacity onPress={() => Linking.openURL(trip.source_url!)}>
-                <View className="flex-row items-center gap-1">
-                  <Text className="text-xs text-blue-400">Voir la vidéo</Text>
-                  <ExternalLink size={12} color="#60a5fa" />
-                </View>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-      )}
-
-      {/* ════════════════════════════════════════════
           CONTENT BY TAB
       ════════════════════════════════════════════ */}
-      <ScrollView className="flex-1 max-w-2xl mx-auto w-full px-4 pt-4">
+      <ScrollView className="flex-1 max-w-2xl mx-auto w-full">
 
         {/* ─────────────────── ITINERARY ─────────────────── */}
         {activeTab === 'itinerary' && (
-          <View className="gap-3 pb-6">
+          <View className="gap-3 pb-6 px-4">
+            {/* HERO - Map with destinations */}
+            <View className="h-72 mt-3 rounded-xl overflow-hidden border border-zinc-800 bg-zinc-950">
+              {destinations.length > 0 ? (
+                <InteractiveHeroMap destinations={destinations} />
+              ) : (
+                <View className="w-full h-full relative">
+                  <Image
+                    source={{ uri: trip.thumbnail_url || 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=800' }}
+                    className="w-full h-full opacity-60"
+                    resizeMode="cover"
+                  />
+                  <View className="absolute inset-0 bg-black/40" />
+                </View>
+              )}
+            </View>
+
+            {/* QUICK STATS + CREATOR INFO */}
+            <View className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
+              {/* Stats bar */}
+              <View className="flex-row px-4 py-3">
+                <StatCell
+                  icon={<CalendarDays size={14} color="#60a5fa" />}
+                  value={`${trip.duration_days}j`}
+                  label="Durée"
+                />
+                <View className="w-px bg-zinc-800 mx-2" />
+                <StatCell
+                  icon={<MapPin size={14} color="#c084fc" />}
+                  value={String(destinations.length)}
+                  label={destinations.length > 1 ? 'Villes' : 'Ville'}
+                />
+                <View className="w-px bg-zinc-800 mx-2" />
+                <StatCell
+                  icon={<Navigation size={14} color="#34d399" />}
+                  value={String(totalSpots)}
+                  label="Lieux"
+                />
+              </View>
+
+              {/* Creator info (if present) */}
+              {trip.content_creator_handle && (
+                <View className="border-t border-zinc-800 px-4 py-3 flex-row items-center gap-3">
+                  <Camera size={16} color="#a1a1aa" />
+                  <View className="flex-1">
+                    <Text className="text-xs text-zinc-500">Créateur de contenu</Text>
+                    <Text className="text-sm text-white font-medium">@{trip.content_creator_handle}</Text>
+                  </View>
+                  {trip.source_url && (
+                    <TouchableOpacity onPress={() => Linking.openURL(trip.source_url!)}>
+                      <View className="flex-row items-center gap-1">
+                        <Text className="text-xs text-blue-400">Voir la vidéo</Text>
+                        <ExternalLink size={12} color="#60a5fa" />
+                      </View>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+            </View>
             {/* Destinations overview (multi-stop) */}
             {destinations.length > 1 && (
               <View className="bg-zinc-900 rounded-xl border border-zinc-800 p-4">
@@ -436,7 +437,7 @@ export default function TripDetailPage() {
 
         {/* ─────────────────── BUDGET ─────────────────── */}
         {activeTab === 'budget' && (
-          <View className="gap-3 pb-6">
+          <View className="gap-3 pb-6 px-4 pt-4">
             {!budget ? (
               <EmptyState message="Aucune information budget disponible." />
             ) : (
@@ -540,7 +541,7 @@ export default function TripDetailPage() {
 
         {/* ─────────────────── PRACTICAL ─────────────────── */}
         {activeTab === 'practical' && (
-          <View className="gap-3 pb-6">
+          <View className="gap-3 pb-6 px-4 pt-4">
             {!practical ? (
               <EmptyState message="Aucune info pratique disponible." />
             ) : (
@@ -663,7 +664,7 @@ export default function TripDetailPage() {
 
         {/* ─────────────────── LOGISTICS ─────────────────── */}
         {activeTab === 'logistics' && (
-          <View className="gap-3 pb-6">
+          <View className="gap-3 pb-6 px-4 pt-4">
             {logistics.length === 0 ? (
               <EmptyState message="Aucune information de transport disponible." />
             ) : (

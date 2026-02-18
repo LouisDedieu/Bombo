@@ -7,7 +7,6 @@
  * - Affichage de l'email dans l'en-tête
  * - Variantes de statut SSE (pending → downloading → analyzing → done → error)
  * - Barre de progression animée
- * - Bouton "Tester avec données d'exemple"
  * - Fermeture propre (reset URL + erreur)
  */
 
@@ -32,7 +31,6 @@ import {
   Loader2,
   AlertCircle,
   Sparkles,
-  TestTube,
   User,
 } from 'lucide-react-native';
 import { Button } from './Button';
@@ -145,16 +143,6 @@ export default function AddTripModal({ isOpen, onClose }: AddTripModalProps) {
     }
   };
 
-  const handleTestWithMockData = async () => {
-    try {
-      await new Promise(r => setTimeout(r, 1_000));
-      Toast.show({ type: 'success', text1: 'Itinéraire de test chargé !' });
-      onClose();
-    } catch {
-      Toast.show({ type: 'error', text1: 'Erreur lors du chargement des données de test' });
-    }
-  };
-
   const handleClose = () => {
     setUrl('');
     setValidationError('');
@@ -200,14 +188,9 @@ export default function AddTripModal({ isOpen, onClose }: AddTripModalProps) {
                   </View>
                 </View>
 
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onPress={handleClose}
-                  className="text-zinc-400"
-                >
+                <TouchableOpacity onPress={handleClose} className="p-2">
                   <X size={20} color="#a1a1aa" />
-                </Button>
+                </TouchableOpacity>
               </View>
 
               <ScrollView
@@ -331,20 +314,6 @@ export default function AddTripModal({ isOpen, onClose }: AddTripModalProps) {
                         )}
                       </Button>
                     </View>
-
-                    <Button
-                      variant="ghost"
-                      onPress={handleTestWithMockData}
-                      disabled={isAnalyzing}
-                      className="w-full"
-                    >
-                      <View className="flex-row items-center gap-2">
-                        <TestTube size={16} color="#a1a1aa" />
-                        <Text className="text-zinc-400 text-sm font-medium">
-                          Tester avec données d'exemple
-                        </Text>
-                      </View>
-                    </Button>
                   </View>
 
                 </View>

@@ -1,9 +1,12 @@
 import { Tabs } from 'expo-router';
-import { View, Text } from 'react-native';
+import { NativeTabs, Icon, Label } from 'expo-router/unstable-native-tabs';
+import { View, Text, Platform, DynamicColorIOS } from 'react-native';
 import { Inbox, Map, User } from 'lucide-react-native';
 
 const COLOR_ACTIVE   = '#3b82f6';
 const COLOR_INACTIVE = '#71717a';
+
+const isIOS26 = Platform.OS === 'ios' && Number(Platform.Version) >= 26;
 
 function TabIcon({
                    Icon,
@@ -23,7 +26,7 @@ function TabIcon({
   );
 }
 
-export default function TabsLayout() {
+function ClassicTabs() {
   return (
     <Tabs
       screenOptions={{
@@ -46,15 +49,15 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="trips/index"
+        name="trips"
         options={{
-          tabBarIcon: ({ focused }) => <TabIcon Icon={Map} label="Voyages" focused={focused} />,
+          tabBarIcon: ({ focused }) => <TabIcon Icon={Map} label="Trips" focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
-          tabBarIcon: ({ focused }) => <TabIcon Icon={User} label="Profil" focused={focused} />,
+          tabBarIcon: ({ focused }) => <TabIcon Icon={User} label="Profile" focused={focused} />,
         }}
       />
       <Tabs.Screen
@@ -63,18 +66,40 @@ export default function TabsLayout() {
           href: null,
         }}
       />
-      <Tabs.Screen
-        name="trips/[tripId]"
-        options={{
-          href: null,
-        }}
-      />
-      <Tabs.Screen
-        name="review/[tripId]"
-        options={{
-          href: null,
-        }}
-      />
     </Tabs>
   );
+}
+
+function LiquidGlassTabs() {
+  const dynamicColor = DynamicColorIOS({
+    dark: 'white',
+    light: 'black',
+  });
+
+  return (
+    <NativeTabs
+      labelStyle={{ color: dynamicColor }}
+      tintColor={dynamicColor}
+    >
+      <NativeTabs.Trigger name="index">
+        <Icon sf={{ default: 'tray', selected: 'tray.fill' }} md="inbox" />
+        <Label>Inbox</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="trips">
+        <Icon sf={{ default: 'map', selected: 'map.fill' }} md="map" />
+        <Label>Trips</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="profile">
+        <Icon sf={{ default: 'person', selected: 'person.fill' }} md="person" />
+        <Label>Profile</Label>
+      </NativeTabs.Trigger>
+    </NativeTabs>
+  );
+}
+
+export default function TabsLayout() {
+  if (isIOS26) {
+    return <LiquidGlassTabs />;
+  }
+  return <ClassicTabs />;
 }

@@ -17,11 +17,11 @@ import {
   Animated,
   Easing,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Share2,
   Sparkles,
-  RefreshCw,
   CheckCircle2,
   AlertCircle,
   Clock,
@@ -143,38 +143,6 @@ function SpinningLoader({ size = 32, color = '#60a5fa' }: { size?: number; color
   return (
     <Animated.View style={{ transform: [{ rotate: spin }] }}>
       <Loader2 size={size} color={color} />
-    </Animated.View>
-  );
-}
-
-// ── RefreshIcon — RefreshCw avec spin conditionnel ────────────────────────────
-
-function RefreshIcon({ spinning }: { spinning: boolean }) {
-  const rotation = useRef(new Animated.Value(0)).current;
-  const animRef = useRef<Animated.CompositeAnimation | null>(null);
-
-  useEffect(() => {
-    if (spinning) {
-      animRef.current = Animated.loop(
-        Animated.timing(rotation, {
-          toValue: 1,
-          duration: 800,
-          easing: Easing.linear,
-          useNativeDriver: true,
-        })
-      );
-      animRef.current.start();
-    } else {
-      animRef.current?.stop();
-      rotation.setValue(0);
-    }
-  }, [spinning]);
-
-  const spin = rotation.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
-
-  return (
-    <Animated.View style={{ transform: [{ rotate: spin }] }}>
-      <RefreshCw size={20} color="#a1a1aa" /* zinc-400 */ />
     </Animated.View>
   );
 }
@@ -397,6 +365,7 @@ function JobCard({
 export default function InboxPage() {
   const router = useRouter();
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
 
   const [jobs,         setJobs]         = useState<InboxJob[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -435,6 +404,11 @@ export default function InboxPage() {
     loadFromDb(true);
   }, [loadFromDb]);
 
+  // Rechargement à chaque focus (retour sur l'onglet)
+  useFocusEffect(useCallback(() => {
+    loadFromDb(false);
+  }, [loadFromDb]));
+
   // Polling 15s si jobs en cours — web: useEffect + setInterval
   useEffect(() => {
     if (inProgressCount === 0) return;
@@ -445,56 +419,28 @@ export default function InboxPage() {
   const handleJobClick = (job: InboxJob) => {
     if (job.status !== 'done') return;
     if (job.tripId) {
-      router.push(`/(tabs)/review/${job.tripId}`);
+      router.push(`/review/${job.tripId}`);
     }
   };
 
   return (
     <View className="flex-1 bg-black">
-
-      {/* ── Header ──────────────────────────────────────────────────────────── */}
-      {/* web: sticky top-0 bg-zinc-900/95 backdrop-blur border-b border-zinc-800 */}
-      <View
-        className="bg-zinc-900 px-4 py-4"
-        style={{ borderBottomWidth: 1, borderBottomColor: '#27272a' }}
-      >
-        <View className="flex-row items-center justify-between">
-          <View>
-            <Text className="text-2xl font-bold text-white">Inbox</Text>
-            {inProgressCount > 0 && (
-              <Text className="text-sm text-zinc-400 mt-1">
-                {inProgressCount} analyse{inProgressCount > 1 ? 's' : ''} en cours
-              </Text>
-            )}
-          </View>
-          {/* Refresh avec spin animé — web: RefreshCw className={refreshing ? 'animate-spin' : ''} */}
-          <TouchableOpacity
-            onPress={() => loadFromDb(false)}
-            disabled={refreshing}
-            className="p-2"
-            hitSlop={8}
-          >
-            <RefreshIcon spinning={refreshing} />
-          </TouchableOpacity>
-        </View>
-      </View>
-
       {/* ── Chargement initial ───────────────────────────────────────────────── */}
-      {/* web: flex items-center justify-center py-16 + <Loader2 animate-spin /> */}
       {loading ? (
-        <View className="flex-1 items-center justify-center py-16">
-          <SpinningLoader size={32} color="#60a5fa" /* blue-400 */ />
+        <View className="flex-1 items-center justify-center" style={{ paddingTop: insets.top }}>
+          <SpinningLoader size={32} color="#60a5fa" />
         </View>
       ) : (
         <FlatList
           data={jobs}
           keyExtractor={(item) => item.jobId}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 24, gap: 12 }}
+          contentContainerStyle={{ paddingTop: insets.top + 24, paddingHorizontal: 16, paddingBottom: 24, gap: 12 }}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
               onRefresh={() => loadFromDb(false)}
               tintColor="#60a5fa"
+              progressViewOffset={insets.top}
             />
           }
           ListHeaderComponent={

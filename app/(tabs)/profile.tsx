@@ -172,15 +172,6 @@ export default function ProfilePage() {
   return (
     <ScrollView className="flex-1 bg-black">
       {/* ══════════════════════════════════════════
-          HEADER
-      ══════════════════════════════════════════ */}
-      <View className="bg-zinc-900/95 border-b border-zinc-800">
-        <View className="max-w-2xl mx-auto px-4 py-4">
-          <Text className="text-xl font-bold text-white">Profil</Text>
-        </View>
-      </View>
-
-      {/* ══════════════════════════════════════════
           CONTENT
       ══════════════════════════════════════════ */}
       <View className="max-w-2xl mx-auto w-full px-4 py-5 gap-4">

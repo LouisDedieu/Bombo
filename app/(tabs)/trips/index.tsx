@@ -16,6 +16,7 @@ import {
   Animated,
   Easing,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Map, MapPin, Calendar, Loader2, Bookmark } from 'lucide-react-native';
 import { useAuth } from '@/context/AuthContext';
@@ -204,6 +205,7 @@ function TripCard({
 export default function TripsPage() {
   const router = useRouter();
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
 
   const [rows,       setRows]       = useState<SavedTripRow[]>([]);
   const [loading,    setLoading]    = useState(true);
@@ -233,16 +235,15 @@ export default function TripsPage() {
 
   if (loading) {
     return (
-      // web: min-h-screen bg-black flex items-center justify-center + <Loader2 animate-spin />
-      <View className="flex-1 bg-black items-center justify-center">
-        <SpinningLoader size={32} color="#60a5fa" /* blue-400 */ />
+      <View className="flex-1 bg-black items-center justify-center" style={{ paddingTop: insets.top }}>
+        <SpinningLoader size={32} color="#60a5fa" />
       </View>
     );
   }
 
   if (error) {
     return (
-      <View className="flex-1 bg-black items-center justify-center">
+      <View className="flex-1 bg-black items-center justify-center" style={{ paddingTop: insets.top }}>
         <Text className="text-sm text-red-400">Erreur : {error}</Text>
       </View>
     );
@@ -250,7 +251,7 @@ export default function TripsPage() {
 
   if (!user) {
     return (
-      <View className="flex-1 bg-black items-center justify-center">
+      <View className="flex-1 bg-black items-center justify-center" style={{ paddingTop: insets.top }}>
         <Text className="text-zinc-400">Connectez-vous pour voir vos voyages.</Text>
       </View>
     );
@@ -259,23 +260,11 @@ export default function TripsPage() {
   return (
     <View className="flex-1 bg-black">
 
-      {/* ── Header ── */}
-      {/* web: sticky top-0 bg-zinc-900/95 backdrop-blur border-b border-zinc-800 */}
-      <View
-        className="bg-zinc-900 px-4 py-4"
-        style={{ borderBottomWidth: 1, borderBottomColor: '#27272a' }}
-      >
-        <Text className="text-2xl font-bold text-white">Mes Voyages</Text>
-        <Text className="text-sm text-zinc-400 mt-1">
-          {rows.length} {rows.length === 1 ? 'itinéraire sauvegardé' : 'itinéraires sauvegardés'}
-        </Text>
-      </View>
-
       {/* ── Liste ── */}
       <FlatList
         data={rows}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{ padding: 16, gap: 16 }}
+        contentContainerStyle={{ paddingTop: insets.top + 16, paddingHorizontal: 16, paddingBottom: 16, gap: 16 }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

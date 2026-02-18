@@ -2,7 +2,8 @@ import '../styles/global.css';
 
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { View } from 'react-native';
 import { Toaster } from 'sonner-native';
 import { AuthProvider } from '@/context/AuthContext';
 import { useAuthGuardState, LoadingScreen, NetworkErrorScreen, EmailPendingScreen } from '@/components/AuthGuard';
@@ -18,6 +19,7 @@ function AuthGate({ onRetry }: { onRetry: () => void }) {
     if (group === 'loading') return;
 
     const inTabs = segments[0] === '(tabs)';
+    const inReview = segments[0] === 'review';
 
     if (group === 'network_error') return; // géré via rendu conditionnel
     if (group === 'email_pending') return; // idem
@@ -26,7 +28,7 @@ function AuthGate({ onRetry }: { onRetry: () => void }) {
       router.replace('/login');
     } else if (group === 'main' && isPasswordRecovery) {
       router.replace('/reset-password');
-    } else if (group === 'main' && !inTabs) {
+    } else if (group === 'main' && !inTabs && !inReview) {
       router.replace('/');
     }
   }, [group, isPasswordRecovery, segments]);
@@ -38,6 +40,7 @@ function AuthGate({ onRetry }: { onRetry: () => void }) {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="review/[tripId]" />
       <Stack.Screen name="login" />
       <Stack.Screen name="reset-password" />
       <Stack.Screen name="+not-found" />
@@ -51,14 +54,14 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#000000' }}>
+      <View style={{ flex: 1, backgroundColor: '#000000' }}>
         <StatusBar style="light" />
         <AuthProvider key={retryKey}>
           <AuthGate onRetry={handleRetry} />
           <Toaster position="top-center" />
           {process.env.EXPO_PUBLIC_DEV_MODE === 'true' && <DebugPanel />}
         </AuthProvider>
-      </SafeAreaView>
+      </View>
     </SafeAreaProvider>
   );
 }
