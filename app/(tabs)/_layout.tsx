@@ -6,7 +6,7 @@ import { Inbox, Map, User } from 'lucide-react-native';
 const COLOR_ACTIVE   = '#3b82f6';
 const COLOR_INACTIVE = '#71717a';
 
-const isIOS26 = Platform.OS === 'ios' && Number(Platform.Version) >= 26;
+const isIOS26 = Platform.OS === 'ios' && parseInt(String(Platform.Version), 10) >= 26;
 
 function TabIcon({
                    Icon,

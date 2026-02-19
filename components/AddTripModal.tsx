@@ -197,16 +197,6 @@ export default function AddTripModal({ isOpen, onClose }: AddTripModalProps) {
                 keyboardShouldPersistTaps="handled"
                 contentContainerClassName="pb-2"
               >
-                {/* ── Utilisateur connecté ──────────────────────────────── */}
-                {user && (
-                  <View className="flex-row items-center gap-2 px-6 pt-4 pb-2">
-                    <User size={12} color="#71717a" />
-                    <Text className="text-xs text-zinc-400">
-                      Connecté en tant que{' '}
-                      <Text className="font-semibold text-zinc-300">{user.email}</Text>
-                    </Text>
-                  </View>
-                )}
 
                 {/* ── Formulaire ────────────────────────────────────────── */}
                 <View className="p-6 gap-4">
@@ -294,6 +284,7 @@ export default function AddTripModal({ isOpen, onClose }: AddTripModalProps) {
                         variant="outline"
                         onPress={handleClose}
                         className="flex-1 border-zinc-700"
+                        textClassName="text-zinc-300"
                         title="Annuler"
                       />
                       <Button
