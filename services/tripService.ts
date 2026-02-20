@@ -1,109 +1,45 @@
-import { supabase } from '@/lib/supabase';
+import { apiFetch, apiPost, apiPatch, apiDelete } from '@/lib/api';
 
 /** Full trip with nested relations — only validated itinerary days */
 export async function getTrip(tripId: string) {
-  const { data, error } = await supabase
-    .from('trips')
-    .select(`
-      *,
-      destinations(*),
-      logistics(*),
-      budgets(*),
-      practical_info(*)
-    `)
-    .eq('id', tripId)
-    .single();
-
-  if (error) throw error;
-
-  // Fetch uniquement les jours validés avec leurs spots
-  const { data: validatedDays, error: daysError } = await supabase
-    .from('itinerary_days')
-    .select('*, spots(*)')
-    .eq('trip_id', tripId)
-    .eq('validated', true)
-    .order('day_number');
-
-  if (daysError) throw daysError;
-
-  return { ...data, itinerary_days: validatedDays ?? [] };
+  return apiFetch<any>(`/trips/${tripId}`);
 }
 
 /** All public trips (for a discovery feed) */
 export async function getPublicTrips(limit = 20) {
-  const { data, error } = await supabase
-    .from('trip_details')
-    .select('*')
-    .eq('is_public', true)
-    .order('created_at', { ascending: false })
-    .limit(limit);
-
-  if (error) throw error;
-  return data ?? [];
+  return apiFetch<any[]>(`/trips/public?limit=${limit}`);
 }
 
 /** All trips that belong to one user */
 export async function getUserTrips(userId: string) {
-  const { data, error } = await supabase
-    .from('trip_details')
-    .select('*')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false });
-
-  if (error) throw error;
-  return data ?? [];
+  return apiFetch<any[]>(`/trips/user/${userId}`);
 }
 
-/** Delete a trip (user must own it — enforced by RLS) */
+/** Delete a trip (user must own it — enforced by backend) */
 export async function deleteTrip(tripId: string) {
-  const { error } = await supabase
-    .from('trips')
-    .delete()
-    .eq('id', tripId);
-
-  if (error) throw error;
+  return apiDelete(`/trips/${tripId}`);
 }
 
 // ── Saved trips ──────────────────────────────────────────────────────────────
 
-/** Check if a trip is already saved by the user */
-export async function isTripSaved(userId: string, tripId: string): Promise<boolean> {
-  const { data, error } = await supabase
-    .from('user_saved_trips')
-    .select('id')
-    .eq('user_id', userId)
-    .eq('trip_id', tripId)
-    .maybeSingle();
-
-  if (error) throw error;
-  return data !== null;
+/** Check if a trip is already saved by the current user */
+export async function isTripSaved(_userId: string, tripId: string): Promise<boolean> {
+  const res = await apiFetch<{ saved: boolean }>(`/trips/${tripId}/saved`);
+  return res.saved;
 }
 
-/** Save a trip for a user (idempotent) */
+/** Save a trip for the current user (idempotent) */
 export async function saveTrip(
-  userId: string,
+  _userId: string,
   tripId: string,
   notes?: string
 ): Promise<void> {
-  const { error } = await supabase
-    .from('user_saved_trips')
-    .upsert(
-      { user_id: userId, trip_id: tripId, notes },
-      { onConflict: 'user_id,trip_id', ignoreDuplicates: true }
-    );
-
-  if (error) throw error;
+  await apiPost(`/trips/${tripId}/save`, notes ? { notes } : {});
 }
 
 /** Remove a saved trip */
-export async function unsaveTrip(userId: string, tripId: string): Promise<void> {
-  const { error } = await supabase
-    .from('user_saved_trips')
-    .delete()
-    .eq('user_id', userId)
-    .eq('trip_id', tripId);
-
-  if (error) throw error;
+export async function unsaveTrip(_userId: string, tripId: string): Promise<void> {
+  await apiDelete(`/trips/${tripId}/save`);
 }
 
 /** Toggle save/unsave — returns the new saved state */
@@ -122,39 +58,25 @@ export async function toggleSaveTrip(
   }
 }
 
-/** Get all trips saved by a user */
-export async function getUserSavedTrips(userId: string) {
-  const { data, error } = await supabase
-    .from('user_saved_trips')
-    .select(`
-      id,
-      notes,
-      created_at,
-      trips (*)
-    `)
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false });
-
-  if (error) throw error;
-  return data ?? [];
+/** Get all trips saved by the current user */
+export async function getUserSavedTrips(_userId: string) {
+  return apiFetch<any[]>('/trips/saved');
 }
 
 export async function updateSpotCoordinates(spotId: string, lat: number, lon: number) {
-  const { error } = await supabase
-    .from('spots')
-    .update({ latitude: lat, longitude: lon })
-    .eq('id', spotId);
-
-  if (error) console.error(`Erreur update spot ${spotId}:`, error);
+  try {
+    await apiPatch(`/review/spots/${spotId}/coordinates`, { lat, lon });
+  } catch (e) {
+    console.error(`Erreur update spot ${spotId}:`, e);
+  }
 }
 
 export async function updateDestinationCoordinates(destId: string, lat: number, lon: number) {
-  const { error } = await supabase
-    .from('destinations')
-    .update({ latitude: lat, longitude: lon })
-    .eq('id', destId);
-
-  if (error) console.error(`Erreur update destination ${destId}:`, error);
+  try {
+    await apiPatch(`/review/destinations/${destId}/coordinates`, { lat, lon });
+  } catch (e) {
+    console.error(`Erreur update destination ${destId}:`, e);
+  }
 }
 
 export function normalizeTextForLocationIQAPI(text: string): string {

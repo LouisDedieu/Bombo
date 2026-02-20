@@ -30,7 +30,7 @@ import {
   ChevronRight,
 } from 'lucide-react-native';
 import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/lib/supabase';
+import { apiFetch } from '@/lib/api';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -98,49 +98,15 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (!user?.id) return;
-    fetchAll(user.id);
+    fetchAll();
   }, [user?.id]);
 
-  const fetchAll = async (userId: string) => {
+  const fetchAll = async () => {
     setLoading(true);
     try {
-      const [profileRes, tripsRes, savedRes, jobsRes] = await Promise.all([
-        // Profile
-        supabase
-          .from('profiles')
-          .select('username, full_name, bio, avatar_url, created_at')
-          .eq('id', userId)
-          .single(),
-
-        // Trips créés : count + somme views
-        supabase
-          .from('trips')
-          .select('id, views_count')
-          .eq('user_id', userId),
-
-        // Voyages sauvegardés : count
-        supabase
-          .from('user_saved_trips')
-          .select('id', { count: 'exact', head: true })
-          .eq('user_id', userId),
-
-        // Vidéos analysées (jobs terminés)
-        supabase
-          .from('analysis_jobs')
-          .select('id', { count: 'exact', head: true })
-          .eq('user_id', userId)
-          .eq('status', 'completed'),
-      ]);
-
-      if (profileRes.data) setProfile(profileRes.data);
-
-      const trips = tripsRes.data ?? [];
-      setStats({
-        tripsCreated: trips.length,
-        totalViews: trips.reduce((sum, t) => sum + (t.views_count ?? 0), 0),
-        tripsSaved: savedRes.count ?? 0,
-        videosAnalyzed: jobsRes.count ?? 0,
-      });
+      const res = await apiFetch<{ profile: ProfileData | null; stats: Stats }>('/profile');
+      if (res.profile) setProfile(res.profile);
+      setStats(res.stats);
     } catch (err) {
       console.error('[Profile] fetch error:', err);
     } finally {
