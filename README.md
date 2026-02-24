@@ -1,8 +1,8 @@
-# Welcome to your Expo app 👋
+# Bombo
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Application mobile React Native / Expo.
 
-## Get started
+## Get started (Development)
 
 1. Install dependencies
 
@@ -25,15 +25,101 @@ In the output, you'll find options to open the app in a
 
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
-## Get a fresh project
+---
 
-When you're ready, run:
+## Installation sur iPhone (Production Build)
+
+Cette section explique comment installer l'application sur un vrai iPhone depuis un Mac.
+
+### Prérequis
+
+- **macOS** avec Xcode installé (version 15+ recommandée)
+- **Compte Apple Developer** (gratuit ou payant)
+- **iPhone** connecté en USB au Mac
+- **CocoaPods** installé (`sudo gem install cocoapods`)
+
+### Étapes d'installation
+
+#### 1. Installer les dépendances
 
 ```bash
-npm run reset-project
+npm install
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+#### 2. Générer le projet natif iOS
+
+```bash
+npx expo prebuild --platform ios
+```
+
+Cette commande crée le dossier `ios/` avec le projet Xcode natif.
+
+#### 3. Installer les dépendances CocoaPods
+
+```bash
+cd ios && pod install && cd ..
+```
+
+#### 4. Ouvrir le projet dans Xcode
+
+```bash
+open ios/BomboMobile.xcworkspace
+```
+
+**Important** : Ouvrir le fichier `.xcworkspace` et non `.xcodeproj`.
+
+#### 5. Configurer la signature dans Xcode
+
+1. Dans Xcode, sélectionner le projet **BomboMobile** dans le navigateur
+2. Aller dans l'onglet **Signing & Capabilities**
+3. Cocher **Automatically manage signing**
+4. Sélectionner votre **Team** (compte Apple Developer)
+5. Si le Bundle Identifier est pris, le modifier (ex: `com.votrenom.bombomobile`)
+
+#### 6. Préparer l'iPhone
+
+1. Connecter l'iPhone au Mac via USB
+2. Sur l'iPhone : **Réglages > Confidentialité et sécurité > Mode développeur** → Activer
+3. Faire confiance à l'ordinateur si demandé
+
+#### 7. Build et installation
+
+1. Dans Xcode, sélectionner votre iPhone comme destination (en haut à gauche)
+2. Appuyer sur **Cmd + R** ou cliquer sur le bouton Play
+3. Attendre la compilation et l'installation
+
+#### 8. Faire confiance à l'application (première installation)
+
+Sur l'iPhone :
+1. **Réglages > Général > Gestion des appareils (ou VPN et gestion des appareils)**
+2. Trouver votre profil développeur
+3. Cliquer sur **Faire confiance**
+
+### Commandes utiles
+
+| Action | Commande |
+|--------|----------|
+| Rebuild complet | `npx expo prebuild --platform ios --clean` |
+| Nettoyer le build Xcode | `Cmd + Shift + K` dans Xcode |
+| Mettre à jour les pods | `cd ios && pod install --repo-update` |
+
+### Résolution de problèmes
+
+**"Could not find module..."** ou erreur de module natif :
+```bash
+cd ios && pod install && cd ..
+# Puis rebuild dans Xcode (Cmd + Shift + K, puis Cmd + R)
+```
+
+**Erreur de signature** :
+- Vérifier que le compte Apple Developer est bien configuré dans Xcode > Preferences > Accounts
+- Modifier le Bundle Identifier si nécessaire
+
+**L'app ne se lance pas sur l'iPhone** :
+- Vérifier que le Mode développeur est activé sur l'iPhone
+- Faire confiance au profil développeur dans les réglages
+
+---
 
 ## Learn more
 
@@ -41,10 +127,3 @@ To learn more about developing your project with Expo, look at the following res
 
 - [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
 - [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
