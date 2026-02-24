@@ -323,7 +323,10 @@ export default function TripDetailPage() {
       {/* ════════════════════════════════════════════
           CONTENT BY TAB
       ════════════════════════════════════════════ */}
-      <ScrollView className="flex-1 max-w-2xl mx-auto w-full">
+      <ScrollView
+        className="flex-1 max-w-2xl mx-auto w-full"
+        contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}
+      >
 
         {/* ─────────────────── ITINERARY ─────────────────── */}
         {activeTab === 'itinerary' && (
