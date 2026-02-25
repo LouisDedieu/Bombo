@@ -31,7 +31,7 @@ import {
   Plus,
   Loader2,
 } from 'lucide-react-native';
-import { supabase } from '@/lib/supabase';
+import { apiFetch } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import {Button} from '@/components/Button';
 import AddTripModal from '@/components/AddTripModal';
@@ -145,61 +145,6 @@ function SpinningLoader({ size = 32, color = '#60a5fa' }: { size?: number; color
       <Loader2 size={size} color={color} />
     </Animated.View>
   );
-}
-
-// ── Fetch Supabase ─────────────────────────────────────────────────────────────
-
-async function fetchJobsFromSupabase(userId: string): Promise<InboxJob[]> {
-  const { data: jobs, error } = await supabase
-    .from('analysis_jobs')
-    .select('id, source_url, status, progress_percentage, error_message, created_at')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false });
-
-  if (error || !jobs) return [];
-  if (jobs.length === 0) return [];
-
-  const jobIds = jobs.map((j) => j.id);
-  const { data: trips } = await supabase
-    .from('trips')
-    .select('id, job_id, trip_title')
-    .in('job_id', jobIds);
-
-  const tripByJobId = new Map((trips ?? []).map((t) => [t.job_id, t]));
-
-  const tripIds = (trips ?? []).map((t) => t.id);
-  const { data: savedTrips } = tripIds.length > 0
-    ? await supabase
-      .from('user_saved_trips')
-      .select('trip_id')
-      .eq('user_id', userId)
-      .in('trip_id', tripIds)
-    : { data: [] };
-
-  const savedTripIds = new Set((savedTrips ?? []).map((s) => s.trip_id));
-
-  return jobs
-    .filter((job) => {
-      const trip = tripByJobId.get(job.id);
-      if (job.status !== 'done') return true;
-      if (!trip) return true;
-      return !savedTripIds.has(trip.id);
-    })
-    .map((job) => {
-      const trip = tripByJobId.get(job.id);
-      return {
-        jobId:        job.id,
-        tripId:       trip?.id ?? null,
-        title:        trip?.trip_title ?? 'Analyse en cours…',
-        sourceUrl:    job.source_url,
-        platform:     detectPlatform(job.source_url),
-        createdAt:    job.created_at,
-        status:       (job.status ?? 'pending') as JobStatus,
-        progressPct:  job.progress_percentage ?? 0,
-        errorMessage: job.error_message ?? null,
-        isLocal:      false,
-      };
-    });
 }
 
 // ── JobCard ───────────────────────────────────────────────────────────────────
@@ -390,7 +335,7 @@ export default function InboxPage() {
     setError(null);
 
     try {
-      const fetched = await fetchJobsFromSupabase(user.id);
+      const fetched = await apiFetch<InboxJob[]>('/inbox');
       setJobs(fetched);
     } catch (err: any) {
       setError('Impossible de charger vos analyses.');
@@ -534,6 +479,7 @@ export default function InboxPage() {
       <AddTripModal
         isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}
+        onAnalysisStarted={() => loadFromDb(false)}
       />
     </View>
   );

@@ -15,12 +15,13 @@ import {
   Image,
   Animated,
   Easing,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { Map, MapPin, Calendar, Loader2, Bookmark } from 'lucide-react-native';
+import { Map, MapPin, Calendar, Loader2, Bookmark, Trash2 } from 'lucide-react-native';
 import { useAuth } from '@/context/AuthContext';
-import { getUserSavedTrips } from '@/services/tripService';
+import { getUserSavedTrips, deleteTrip } from '@/services/tripService';
 
 // ── Type ──────────────────────────────────────────────────────────────────────
 
@@ -84,13 +85,26 @@ function TripCard({
                     trip,
                     animIndex,
                     onPress,
+                    onDelete,
                   }: {
   trip: SavedTripRow;
   animIndex: number;
   onPress: () => void;
+  onDelete: () => void;
 }) {
   const t = trip.trips;
   if (!t) return null;
+
+  const handleDelete = () => {
+    Alert.alert(
+      'Supprimer définitivement ?',
+      'Ce voyage sera supprimé de façon permanente et ne pourra pas être récupéré.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        { text: 'Supprimer', style: 'destructive', onPress: onDelete },
+      ]
+    );
+  };
 
   // Entrée staggerée
   const opacity     = useRef(new Animated.Value(0)).current;
@@ -189,10 +203,19 @@ function TripCard({
             </Text>
           )}
 
-          {/* Badge sauvegardé — web: Bookmark fill-green-400 + span text-green-400 */}
-          <View className="flex-row items-center gap-1.5 pt-1">
-            <Bookmark size={14} color="#4ade80" fill="#4ade80" /* green-400 */ />
-            <Text className="text-xs text-green-400">Sauvegardé</Text>
+          {/* Footer: Badge sauvegardé + bouton supprimer */}
+          <View className="flex-row items-center justify-between pt-1">
+            <View className="flex-row items-center gap-1.5">
+              <Bookmark size={14} color="#4ade80" fill="#4ade80" /* green-400 */ />
+              <Text className="text-xs text-green-400">Sauvegardé</Text>
+            </View>
+            <TouchableOpacity
+              onPress={handleDelete}
+              className="p-2 -mr-2"
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Trash2 size={18} color="#71717a" /* zinc-500 */ />
+            </TouchableOpacity>
           </View>
         </View>
       </TouchableOpacity>
@@ -279,6 +302,16 @@ export default function TripsPage() {
             onPress={() => {
               if (item.trips) {
                 router.push(`/(tabs)/trips/${item.trips.id}`);
+              }
+            }}
+            onDelete={async () => {
+              if (item.trips) {
+                try {
+                  await deleteTrip(item.trips.id);
+                  setRows((prev) => prev.filter((r) => r.id !== item.id));
+                } catch (err) {
+                  Alert.alert('Erreur', 'Impossible de supprimer le voyage.');
+                }
               }
             }}
           />
