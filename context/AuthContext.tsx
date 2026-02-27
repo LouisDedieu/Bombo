@@ -2,6 +2,9 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { supabase } from '../lib/supabase';
 import type { Session, AuthError } from '@supabase/supabase-js';
 import { Linking, Platform } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
+
+const OAUTH_REDIRECT_URI = 'bombomobile://auth/callback';
 
 export interface User {
   id: string;
@@ -25,6 +28,7 @@ interface AuthContextType {
   isPasswordRecovery: boolean;
   signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
   signUp: (email: string, password: string) => Promise<{ error: AuthError | null; emailSent: boolean }>;
+  signInWithGoogle: () => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: AuthError | null }>;
   updatePassword: (newPassword: string) => Promise<{ error: AuthError | null }>;
@@ -203,6 +207,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: null, emailSent };
   }, []);
 
+  const signInWithGoogle = useCallback(async () => {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: OAUTH_REDIRECT_URI,
+        skipBrowserRedirect: true,
+      },
+    });
+
+    if (error) return { error };
+    if (!data.url) return { error: new Error('No OAuth URL returned') };
+
+    const result = await WebBrowser.openAuthSessionAsync(data.url, OAUTH_REDIRECT_URI);
+
+    if (result.type === 'success') {
+      const { error: sessionError } = await supabase.auth.exchangeCodeForSession(result.url);
+      if (sessionError) return { error: sessionError };
+    }
+
+    return { error: null };
+  }, []);
+
   const signOut = useCallback(async () => {
     if (TEST_MODE) {
       console.warn('[Auth] Sign-out disabled in test mode');
@@ -245,6 +271,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isPasswordRecovery,
       signIn,
       signUp,
+      signInWithGoogle,
       signOut,
       resetPassword,
       updatePassword,
