@@ -1,12 +1,24 @@
 import { Tabs } from 'expo-router';
-import { NativeTabs, Icon, Label } from 'expo-router/unstable-native-tabs';
 import { View, Text, Platform, DynamicColorIOS } from 'react-native';
 import { Inbox, Bookmark, User } from 'lucide-react-native';
+import Constants from 'expo-constants';
 
 const COLOR_ACTIVE   = '#3b82f6';
 const COLOR_INACTIVE = '#71717a';
 
-const isIOS26 = Platform.OS === 'ios' && parseInt(String(Platform.Version), 10) >= 26;
+const isExpoGo = Constants.appOwnership === 'expo';
+const isIOS26 = Platform.OS === 'ios' && parseInt(String(Platform.Version), 10) >= 26 && !isExpoGo;
+
+// Dynamically import NativeTabs only when supported
+let NativeTabs: any = null;
+let Icon: any = null;
+let Label: any = null;
+if (isIOS26) {
+  const nativeTabsModule = require('expo-router/unstable-native-tabs');
+  NativeTabs = nativeTabsModule.NativeTabs;
+  Icon = nativeTabsModule.Icon;
+  Label = nativeTabsModule.Label;
+}
 
 function TabIcon({
                    Icon,
@@ -71,6 +83,8 @@ function ClassicTabs() {
 }
 
 function LiquidGlassTabs() {
+  if (!NativeTabs) return <ClassicTabs />;
+
   const dynamicColor = DynamicColorIOS({
     dark: 'white',
     light: 'black',

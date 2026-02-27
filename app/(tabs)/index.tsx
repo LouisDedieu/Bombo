@@ -369,7 +369,10 @@ export default function InboxPage() {
   ).length;
 
   const loadFromDb = useCallback(async (showLoader = true) => {
-    if (!user?.id) return;
+    if (!user?.id) {
+      setLoading(false);
+      return;
+    }
     if (showLoader) setLoading(true);
     else setRefreshing(true);
     setError(null);

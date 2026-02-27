@@ -102,14 +102,21 @@ export default function ShareScreen(props: InitialProps) {
     setPhase('loading');
 
     try {
-      const [jwt, userId] = await Promise.all([
-        SecureStore.getItemAsync('supabase_jwt', {
-          accessGroup: 'group.com.anonymous.BomboMobile.shared',
-        }),
-        SecureStore.getItemAsync('supabase_user_id', {
-          accessGroup: 'group.com.anonymous.BomboMobile.shared',
-        }),
-      ]);
+      const jwt = await SecureStore.getItemAsync('supabase_jwt', {
+        accessGroup: 'group.com.anonymous.BomboMobile.shared',
+      });
+
+      // Extract user_id from JWT payload (sub claim) instead of reading separately
+      let userId: string | null = null;
+      if (jwt) {
+        try {
+          const payload = jwt.split('.')[1];
+          const decoded = JSON.parse(atob(payload));
+          userId = decoded.sub || null;
+        } catch (e) {
+          console.log('[ShareExtension] Failed to decode JWT:', e);
+        }
+      }
 
       console.log('[ShareExtension] jwt exists:', !!jwt, 'userId:', userId);
 
