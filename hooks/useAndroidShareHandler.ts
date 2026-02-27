@@ -1,7 +1,14 @@
 import { useEffect } from 'react';
 import { BackHandler, Platform } from 'react-native';
-import ShareMenu from 'react-native-share-menu';
 import { supabase } from '@/lib/supabase';
+import Constants from 'expo-constants';
+
+// Only import ShareMenu in development builds (not Expo Go)
+let ShareMenu: any = null;
+const isExpoGo = Constants.appOwnership === 'expo';
+if (Platform.OS === 'android' && !isExpoGo) {
+  ShareMenu = require('react-native-share-menu').default;
+}
 
 const API_BASE: string =
   process.env.EXPO_PUBLIC_API_BASE ?? 'http://localhost:8000';
@@ -27,7 +34,7 @@ type SharedItem = { mimeType: string; data: string } | null;
 
 export function useAndroidShareHandler() {
   useEffect(() => {
-    if (Platform.OS !== 'android') return;
+    if (Platform.OS !== 'android' || !ShareMenu) return;
 
     const handleShare = async (item: SharedItem) => {
       if (!item || item.mimeType !== 'text/plain') return;

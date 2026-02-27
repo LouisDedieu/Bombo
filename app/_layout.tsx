@@ -59,13 +59,13 @@ export default function RootLayout() {
   useEffect(() => {
     if (Platform.OS !== 'ios') return;
 
-    syncJwtToSharedStorage();
+    syncJwtToSharedStorage().catch(() => {});
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.access_token) {
-        await syncJwtToSharedStorage();
+        syncJwtToSharedStorage().catch(() => {});
       }
     });
 
