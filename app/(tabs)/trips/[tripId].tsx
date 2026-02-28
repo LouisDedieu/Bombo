@@ -46,9 +46,15 @@ import {
   Sun,
   Moon,
   Camera,
+  Plus,
+  Building2,
 } from 'lucide-react-native';
 import { getTrip } from '@/services/tripService';
+import { getUserSavedCities } from '@/services/cityService';
+import { useAuth } from '@/context/AuthContext';
 import { Destination } from '@/types/api';
+import { AddCityToTripModal } from '@/components/trip/AddCityToTripModal';
+import type { DbDay as ReviewDbDay } from '@/services/reviewService';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -185,23 +191,57 @@ type Tab = 'itinerary' | 'budget' | 'practical' | 'logistics';
 // Main Component
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Type for saved city mapping
+interface SavedCityMap {
+  [cityName: string]: string; // cityName -> cityId
+}
+
 export default function TripDetailPage() {
   const router = useRouter();
   const { tripId } = useLocalSearchParams<{ tripId: string }>();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
 
   const [trip, setTrip] = useState<FullTrip | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('itinerary');
   const [expandedDay, setExpandedDay] = useState<number>(1);
+  const [showAddCityModal, setShowAddCityModal] = useState(false);
+  const [savedCitiesMap, setSavedCitiesMap] = useState<SavedCityMap>({});
 
-  useEffect(() => {
+  const loadTrip = () => {
     if (!tripId) return;
     getTrip(tripId)
       .then((data) => setTrip(data as FullTrip))
       .catch(console.error)
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadTrip();
   }, [tripId]);
+
+  // Load saved cities to create a mapping
+  useEffect(() => {
+    if (!user?.id) return;
+    getUserSavedCities(user.id, 1, 100)
+      .then((res) => {
+        const map: SavedCityMap = {};
+        res.items.forEach((item) => {
+          if (item.cities?.city_name) {
+            map[item.cities.city_name.toLowerCase()] = item.cities.id;
+          }
+        });
+        setSavedCitiesMap(map);
+      })
+      .catch(console.error);
+  }, [user?.id]);
+
+  // Helper to find saved city ID by destination city name
+  const getSavedCityId = (cityName: string | undefined): string | null => {
+    if (!cityName) return null;
+    return savedCitiesMap[cityName.toLowerCase()] || null;
+  };
 
   // Derived data
   const derived = useMemo(() => {
@@ -392,6 +432,32 @@ export default function TripDetailPage() {
                 </View>
               )}
             </View>
+
+            {/* Single destination with saved city link */}
+            {destinations.length === 1 && getSavedCityId(destinations[0].city) && (
+              <TouchableOpacity
+                onPress={() => router.push(`/(tabs)/trips/city/${getSavedCityId(destinations[0].city)}`)}
+                className="bg-zinc-900 rounded-xl border border-zinc-800 p-4 flex-row items-center gap-3"
+                style={{ borderColor: '#a855f74D' }}
+              >
+                <View
+                  className="w-10 h-10 rounded-full items-center justify-center"
+                  style={{ backgroundColor: '#a855f733' }}
+                >
+                  <Building2 size={20} color="#a855f7" />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-sm font-medium text-white">
+                    {destinations[0].city}
+                  </Text>
+                  <Text className="text-xs text-zinc-500">
+                    Voir les highlights de cette ville
+                  </Text>
+                </View>
+                <ExternalLink size={16} color="#a855f7" />
+              </TouchableOpacity>
+            )}
+
             {/* Destinations overview (multi-stop) */}
             {destinations.length > 1 && (
               <View className="bg-zinc-900 rounded-xl border border-zinc-800 p-4">
@@ -399,31 +465,64 @@ export default function TripDetailPage() {
                   Étapes du voyage
                 </Text>
                 <View>
-                  {destinations.map((dest, i) => (
-                    <View key={dest.id} className="flex-row gap-3 pb-3">
-                      <View className="items-center">
-                        <View className="w-7 h-7 rounded-full bg-blue-500/20 border border-blue-500/40 items-center justify-center">
-                          <Text className="text-blue-400 text-xs font-bold">{i + 1}</Text>
+                  {destinations.map((dest, i) => {
+                    const savedCityId = getSavedCityId(dest.city);
+                    return (
+                      <View key={dest.id} className="flex-row gap-3 pb-3">
+                        <View className="items-center">
+                          <View className="w-7 h-7 rounded-full bg-blue-500/20 border border-blue-500/40 items-center justify-center">
+                            <Text className="text-blue-400 text-xs font-bold">{i + 1}</Text>
+                          </View>
+                          {i < destinations.length - 1 && (
+                            <View className="w-px flex-1 bg-zinc-700 mt-1" />
+                          )}
                         </View>
-                        {i < destinations.length - 1 && (
-                          <View className="w-px flex-1 bg-zinc-700 mt-1" />
-                        )}
+                        <View className="flex-1 pt-1 flex-row items-start justify-between">
+                          <View className="flex-1">
+                            <Text className="text-sm font-medium text-white">
+                              {[dest.city, dest.country].filter(Boolean).join(', ')}
+                            </Text>
+                            {dest.days_spent && (
+                              <Text className="text-xs text-zinc-500 mt-0.5">
+                                {dest.days_spent} jour{dest.days_spent > 1 ? 's' : ''}
+                              </Text>
+                            )}
+                          </View>
+                          {savedCityId && (
+                            <TouchableOpacity
+                              onPress={() => router.push(`/(tabs)/trips/city/${savedCityId}`)}
+                              className="flex-row items-center gap-1 px-2 py-1 rounded-lg"
+                              style={{
+                                backgroundColor: '#a855f71A',
+                                borderWidth: 1,
+                                borderColor: '#a855f74D',
+                              }}
+                            >
+                              <Building2 size={12} color="#a855f7" />
+                              <Text style={{ fontSize: 10, color: '#a855f7' }}>Voir</Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
                       </View>
-                      <View className="flex-1 pt-1">
-                        <Text className="text-sm font-medium text-white">
-                          {[dest.city, dest.country].filter(Boolean).join(', ')}
-                        </Text>
-                        {dest.days_spent && (
-                          <Text className="text-xs text-zinc-500 mt-0.5">
-                            {dest.days_spent} jour{dest.days_spent > 1 ? 's' : ''}
-                          </Text>
-                        )}
-                      </View>
-                    </View>
-                  ))}
+                    );
+                  })}
                 </View>
               </View>
             )}
+
+            {/* Add city button */}
+            <TouchableOpacity
+              onPress={() => setShowAddCityModal(true)}
+              className="flex-row items-center justify-center gap-2 py-3 rounded-xl"
+              style={{
+                backgroundColor: '#a855f71A',
+                borderWidth: 1,
+                borderColor: '#a855f74D',
+              }}
+            >
+              <Plus size={18} color="#a855f7" />
+              <Text style={{ color: '#a855f7', fontWeight: '500' }}>Ajouter une ville</Text>
+            </TouchableOpacity>
 
             {/* Days */}
             {days.length === 0 ? (
@@ -736,6 +835,18 @@ export default function TripDetailPage() {
           </View>
         )}
       </ScrollView>
+
+      {/* Add City Modal */}
+      {tripId && (
+        <AddCityToTripModal
+          visible={showAddCityModal}
+          onClose={() => setShowAddCityModal(false)}
+          tripId={tripId}
+          tripDays={days as unknown as ReviewDbDay[]}
+          existingDestinations={days.map((d) => d.location).filter((loc): loc is string => !!loc)}
+          onCityAdded={loadTrip}
+        />
+      )}
     </View>
   );
 }

@@ -78,3 +78,25 @@ export async function updateSpot(spotId: string, payload: SpotUpdatePayload): Pr
 export async function deleteSpot(spotId: string): Promise<void> {
   await apiDelete(`/review/spots/${spotId}`);
 }
+
+// ── Add city to trip ─────────────────────────────────────────────────────────
+
+export interface AddCityToTripPayload {
+  city_id: string;
+  day_id?: string;
+  create_new_day?: boolean;
+}
+
+export interface AddCityToTripResult {
+  added: boolean;
+  spots_count: number;
+  day_id: string;
+  city_name: string;
+}
+
+export async function addCityToTrip(
+  tripId: string,
+  payload: AddCityToTripPayload
+): Promise<AddCityToTripResult> {
+  return apiPost<AddCityToTripResult>(`/review/${tripId}/add-city`, payload);
+}
