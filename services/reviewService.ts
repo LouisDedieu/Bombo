@@ -100,3 +100,45 @@ export async function addCityToTrip(
 ): Promise<AddCityToTripResult> {
   return apiPost<AddCityToTripResult>(`/review/${tripId}/add-city`, payload);
 }
+
+// ── Add new destination (manual city) ────────────────────────────────────────
+
+export interface AddDestinationPayload {
+  city_name: string;
+  country?: string;
+  latitude: number;
+  longitude: number;
+}
+
+export interface AddDestinationResult {
+  added: boolean;
+  destination_id: string;
+  day_id: string;
+  city_name: string;
+}
+
+export async function addDestinationToTrip(
+  tripId: string,
+  payload: AddDestinationPayload
+): Promise<AddDestinationResult> {
+  return apiPost<AddDestinationResult>(`/review/${tripId}/add-destination`, payload);
+}
+
+// ── Delete destination ────────────────────────────────────────────────────────
+
+export async function deleteDestination(tripId: string, destId: string): Promise<void> {
+  await apiDelete(`/review/${tripId}/destinations/${destId}`);
+}
+
+// ── Reorder destinations ──────────────────────────────────────────────────────
+
+export interface ReorderDestinationsPayload {
+  destinations: Array<{ id: string; order: number }>;
+}
+
+export async function reorderDestinations(
+  tripId: string,
+  payload: ReorderDestinationsPayload
+): Promise<void> {
+  await apiPatch(`/review/${tripId}/destinations/reorder`, payload);
+}

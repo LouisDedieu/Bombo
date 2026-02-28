@@ -3,11 +3,10 @@
  * Complete refactor with NativeWind, preserving all React source features
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
-  ScrollView,
   TouchableOpacity,
   ActivityIndicator,
   Linking,
@@ -16,6 +15,13 @@ import {
   Platform,
   Alert,
 } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import {
+  NestableScrollContainer,
+  NestableDraggableFlatList,
+  ScaleDecorator,
+  RenderItemParams,
+} from 'react-native-draggable-flatlist';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { InteractiveHeroMap } from '@/components/InteractiveHeroMap';
@@ -48,6 +54,9 @@ import {
   Camera,
   Plus,
   Building2,
+  GripVertical,
+  Check,
+  Trash2,
 } from 'lucide-react-native';
 import { getTrip } from '@/services/tripService';
 import { getUserSavedCities } from '@/services/cityService';
@@ -55,6 +64,7 @@ import { useAuth } from '@/context/AuthContext';
 import { Destination } from '@/types/api';
 import { AddCityToTripModal } from '@/components/trip/AddCityToTripModal';
 import type { DbDay as ReviewDbDay } from '@/services/reviewService';
+import { reorderDestinations, deleteDestination } from '@/services/reviewService';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -208,6 +218,9 @@ export default function TripDetailPage() {
   const [expandedDay, setExpandedDay] = useState<number>(1);
   const [showAddCityModal, setShowAddCityModal] = useState(false);
   const [savedCitiesMap, setSavedCitiesMap] = useState<SavedCityMap>({});
+  const [isEditingOrder, setIsEditingOrder] = useState(false);
+  const [pendingDestinations, setPendingDestinations] = useState<Destination[]>([]);
+  const [isSavingOrder, setIsSavingOrder] = useState(false);
 
   const loadTrip = () => {
     if (!tripId) return;
@@ -258,6 +271,54 @@ export default function TripDetailPage() {
     return { destinations, days, logistics, budget, practical, totalSpots, highlights, destLabel, seasonEmoji };
   }, [trip]);
 
+  const enterEditMode = useCallback(() => {
+    if (!derived?.destinations) return;
+    setPendingDestinations([...derived.destinations]);
+    setIsEditingOrder(true);
+  }, [derived?.destinations]);
+
+  const cancelEditMode = useCallback(() => {
+    setIsEditingOrder(false);
+    setPendingDestinations([]);
+  }, []);
+
+  const confirmOrder = useCallback(async () => {
+    if (!tripId) return;
+    if (pendingDestinations.length === 0) {
+      Alert.alert('Attention', "L'itinéraire doit contenir au moins une ville.");
+      return;
+    }
+    setIsSavingOrder(true);
+    try {
+      // Destinations supprimées dans l'UI = présentes dans l'original mais absentes du pending
+      const originalIds = new Set(derived?.destinations.map(d => d.id) ?? []);
+      const pendingIds = new Set(pendingDestinations.map(d => d.id));
+      const deletedIds = [...originalIds].filter(id => !pendingIds.has(id));
+
+      // Supprimer d'abord les destinations retirées
+      if (deletedIds.length > 0) {
+        await Promise.all(deletedIds.map(id => deleteDestination(tripId, id)));
+      }
+
+      // Puis mettre à jour l'ordre des restantes
+      await reorderDestinations(tripId, {
+        destinations: pendingDestinations.map((d, idx) => ({ id: d.id, order: idx + 1 })),
+      });
+
+      setTrip((prev) => {
+        if (!prev) return prev;
+        const updated = pendingDestinations.map((d, idx) => ({ ...d, visit_order: idx + 1 }));
+        return { ...prev, destinations: updated };
+      });
+      setIsEditingOrder(false);
+      setPendingDestinations([]);
+    } catch {
+      Alert.alert('Erreur', "Impossible de sauvegarder les modifications. Réessayez.");
+    } finally {
+      setIsSavingOrder(false);
+    }
+  }, [tripId, pendingDestinations, derived?.destinations]);
+
   if (loading) {
     return (
       <View className="flex-1 bg-black items-center justify-center" style={{ paddingTop: insets.top }}>
@@ -290,6 +351,7 @@ export default function TripDetailPage() {
   ];
 
   return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
     <View className="flex-1 bg-black">
       {/* ════════════════════════════════════════════
           HEADER STICKY
@@ -366,8 +428,8 @@ export default function TripDetailPage() {
       {/* ════════════════════════════════════════════
           CONTENT BY TAB
       ════════════════════════════════════════════ */}
-      <ScrollView
-        className="flex-1 max-w-2xl mx-auto w-full"
+      <NestableScrollContainer
+        style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}
       >
 
@@ -461,52 +523,165 @@ export default function TripDetailPage() {
             {/* Destinations overview (multi-stop) */}
             {destinations.length > 1 && (
               <View className="bg-zinc-900 rounded-xl border border-zinc-800 p-4">
-                <Text className="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-3">
-                  Étapes du voyage
-                </Text>
-                <View>
-                  {destinations.map((dest, i) => {
-                    const savedCityId = getSavedCityId(dest.city);
-                    return (
-                      <View key={dest.id} className="flex-row gap-3 pb-3">
-                        <View className="items-center">
-                          <View className="w-7 h-7 rounded-full bg-blue-500/20 border border-blue-500/40 items-center justify-center">
-                            <Text className="text-blue-400 text-xs font-bold">{i + 1}</Text>
-                          </View>
-                          {i < destinations.length - 1 && (
-                            <View className="w-px flex-1 bg-zinc-700 mt-1" />
-                          )}
-                        </View>
-                        <View className="flex-1 pt-1 flex-row items-start justify-between">
-                          <View className="flex-1">
-                            <Text className="text-sm font-medium text-white">
-                              {[dest.city, dest.country].filter(Boolean).join(', ')}
-                            </Text>
-                            {dest.days_spent && (
-                              <Text className="text-xs text-zinc-500 mt-0.5">
-                                {dest.days_spent} jour{dest.days_spent > 1 ? 's' : ''}
-                              </Text>
-                            )}
-                          </View>
-                          {savedCityId && (
-                            <TouchableOpacity
-                              onPress={() => router.push(`/(tabs)/trips/city/${savedCityId}`)}
-                              className="flex-row items-center gap-1 px-2 py-1 rounded-lg"
-                              style={{
-                                backgroundColor: '#a855f71A',
-                                borderWidth: 1,
-                                borderColor: '#a855f74D',
-                              }}
-                            >
-                              <Building2 size={12} color="#a855f7" />
-                              <Text style={{ fontSize: 10, color: '#a855f7' }}>Voir</Text>
-                            </TouchableOpacity>
-                          )}
-                        </View>
-                      </View>
-                    );
-                  })}
+                {/* Header */}
+                <View className="flex-row items-center justify-between mb-3">
+                  <Text className="text-xs font-medium text-zinc-500 uppercase tracking-wide">
+                    Étapes du voyage
+                  </Text>
+                  {!isEditingOrder ? (
+                    <TouchableOpacity
+                      onPress={enterEditMode}
+                      className="flex-row items-center gap-1 px-2 py-1 rounded-lg"
+                      style={{ backgroundColor: '#27272a', borderWidth: 1, borderColor: '#3f3f46' }}
+                    >
+                      <GripVertical size={12} color="#a1a1aa" />
+                      <Text style={{ fontSize: 11, color: '#a1a1aa' }}>Réordonner</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <Text className="text-[10px] text-zinc-600">Maintenir pour glisser</Text>
+                  )}
                 </View>
+
+                {/* Vue normale — liste statique */}
+                {!isEditingOrder && destinations.map((dest, i) => {
+                  const savedCityId = getSavedCityId(dest.city);
+                  return (
+                    <View key={dest.id} className="flex-row gap-3 pb-3">
+                      <View className="items-center">
+                        <View className="w-7 h-7 rounded-full bg-blue-500/20 border border-blue-500/40 items-center justify-center">
+                          <Text className="text-blue-400 text-xs font-bold">{i + 1}</Text>
+                        </View>
+                        {i < destinations.length - 1 && (
+                          <View className="w-px flex-1 bg-zinc-700 mt-1" />
+                        )}
+                      </View>
+                      <View className="flex-1 pt-1 flex-row items-start justify-between">
+                        <View className="flex-1">
+                          <Text className="text-sm font-medium text-white">
+                            {[dest.city, dest.country].filter(Boolean).join(', ')}
+                          </Text>
+                          {dest.days_spent && (
+                            <Text className="text-xs text-zinc-500 mt-0.5">
+                              {dest.days_spent} jour{dest.days_spent > 1 ? 's' : ''}
+                            </Text>
+                          )}
+                        </View>
+                        {savedCityId && (
+                          <TouchableOpacity
+                            onPress={() => router.push(`/(tabs)/trips/city/${savedCityId}`)}
+                            className="flex-row items-center gap-1 px-2 py-1 rounded-lg"
+                            style={{ backgroundColor: '#a855f71A', borderWidth: 1, borderColor: '#a855f74D' }}
+                          >
+                            <Building2 size={12} color="#a855f7" />
+                            <Text style={{ fontSize: 10, color: '#a855f7' }}>Voir</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    </View>
+                  );
+                })}
+
+                {/* Mode édition — liste draggable */}
+                {isEditingOrder && (
+                  <>
+                    <NestableDraggableFlatList
+                      data={pendingDestinations}
+                      keyExtractor={(item) => item.id}
+                      onDragEnd={({ data }) => setPendingDestinations(data)}
+                      scrollEnabled={false}
+                      renderItem={({ item: dest, drag, isActive, getIndex }: RenderItemParams<Destination>) => {
+                        const i = getIndex() ?? 0;
+                        return (
+                          <ScaleDecorator activeScale={0.97}>
+                            <View
+                              className="flex-row gap-3 pb-3"
+                              style={{ opacity: isActive ? 0.75 : 1 }}
+                            >
+                              <View className="items-center">
+                                <View className="w-7 h-7 rounded-full bg-blue-500/20 border border-blue-500/40 items-center justify-center">
+                                  <Text className="text-blue-400 text-xs font-bold">{i + 1}</Text>
+                                </View>
+                                {i < pendingDestinations.length - 1 && (
+                                  <View className="w-px flex-1 bg-zinc-700 mt-1" />
+                                )}
+                              </View>
+                              <View className="flex-1 pt-1 flex-row items-center justify-between">
+                                <View className="flex-1">
+                                  <Text className="text-sm font-medium text-white">
+                                    {[dest.city, dest.country].filter(Boolean).join(', ')}
+                                  </Text>
+                                  {dest.days_spent && (
+                                    <Text className="text-xs text-zinc-500 mt-0.5">
+                                      {dest.days_spent} jour{dest.days_spent > 1 ? 's' : ''}
+                                    </Text>
+                                  )}
+                                </View>
+                                <View className="flex-row items-center gap-3">
+                                  <TouchableOpacity
+                                    onPress={() => {
+                                      Alert.alert(
+                                        'Supprimer cette ville ?',
+                                        `${dest.city} et tous ses jours seront supprimés de l'itinéraire.`,
+                                        [
+                                          { text: 'Annuler', style: 'cancel' },
+                                          {
+                                            text: 'Supprimer',
+                                            style: 'destructive',
+                                            onPress: () =>
+                                              setPendingDestinations(prev =>
+                                                prev.filter(d => d.id !== dest.id)
+                                              ),
+                                          },
+                                        ]
+                                      );
+                                    }}
+                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                  >
+                                    <Trash2 size={16} color="#f87171" />
+                                  </TouchableOpacity>
+                                  <TouchableOpacity
+                                    onLongPress={drag}
+                                    delayLongPress={100}
+                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                  >
+                                    <GripVertical size={18} color="#71717a" />
+                                  </TouchableOpacity>
+                                </View>
+                              </View>
+                            </View>
+                          </ScaleDecorator>
+                        );
+                      }}
+                    />
+
+                    {/* Confirmer / Annuler */}
+                    <View
+                      className="flex-row gap-2 mt-1 pt-3"
+                      style={{ borderTopWidth: 1, borderTopColor: '#27272a' }}
+                    >
+                      <TouchableOpacity
+                        onPress={cancelEditMode}
+                        disabled={isSavingOrder}
+                        className="flex-1 items-center py-2 rounded-lg"
+                        style={{ backgroundColor: '#27272a', borderWidth: 1, borderColor: '#3f3f46' }}
+                      >
+                        <Text style={{ fontSize: 13, color: '#a1a1aa', fontWeight: '500' }}>Annuler</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={confirmOrder}
+                        disabled={isSavingOrder}
+                        className="flex-1 flex-row items-center justify-center gap-1.5 py-2 rounded-lg"
+                        style={{ backgroundColor: '#2563eb', opacity: isSavingOrder ? 0.6 : 1 }}
+                      >
+                        {isSavingOrder
+                          ? <ActivityIndicator size="small" color="#fff" />
+                          : <Check size={13} color="#fff" />
+                        }
+                        <Text style={{ fontSize: 13, color: '#fff', fontWeight: '600' }}>Confirmer</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                )}
               </View>
             )}
 
@@ -834,7 +1009,7 @@ export default function TripDetailPage() {
             )}
           </View>
         )}
-      </ScrollView>
+      </NestableScrollContainer>
 
       {/* Add City Modal */}
       {tripId && (
@@ -848,6 +1023,7 @@ export default function TripDetailPage() {
         />
       )}
     </View>
+    </GestureHandlerRootView>
   );
 }
 

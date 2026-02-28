@@ -393,7 +393,16 @@ export default function InboxPage() {
 
     try {
       const fetched = await apiFetch<InboxJob[]>('/inbox');
-      setJobs(fetched);
+      const now = Date.now();
+      setJobs(prev => {
+        // Garde les jobs optimistes qui ne sont pas encore dans la DB (max 15s)
+        const keepOptimistic = prev.filter(j =>
+          j.isLocal &&
+          !fetched.some(f => f.sourceUrl === j.sourceUrl) &&
+          now - new Date(j.createdAt).getTime() < 15_000
+        );
+        return [...keepOptimistic, ...fetched];
+      });
     } catch (err: any) {
       setError('Impossible de charger vos analyses.');
     } finally {
@@ -411,7 +420,7 @@ export default function InboxPage() {
     loadFromDb(false);
   }, [loadFromDb]));
 
-  // Polling 15s si jobs en cours — web: useEffect + setInterval
+  // Polling 15s si jobs en cours
   useEffect(() => {
     if (inProgressCount === 0) return;
     const interval = setInterval(() => loadFromDb(false), 15_000);
@@ -563,7 +572,23 @@ export default function InboxPage() {
       <AddTripModal
         isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}
-        onAnalysisStarted={() => loadFromDb(false)}
+        onAnalysisStarted={(url) => {
+          const optimistic: InboxJob = {
+            jobId: `optimistic-${Date.now()}`,
+            tripId: null,
+            cityId: null,
+            entityType: 'trip',
+            title: url,
+            sourceUrl: url,
+            platform: detectPlatform(url),
+            createdAt: new Date().toISOString(),
+            status: 'pending',
+            progressPct: 0,
+            errorMessage: null,
+            isLocal: true,
+          };
+          setJobs(prev => [optimistic, ...prev]);
+        }}
       />
     </View>
   );

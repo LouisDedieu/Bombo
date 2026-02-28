@@ -40,6 +40,7 @@ import { getCity } from '@/services/cityService';
 import {
   createHighlight,
   updateHighlight,
+  updateHighlightCoordinates,
   deleteHighlight,
   type CreateHighlightPayload,
   type HighlightUpdatePayload,
@@ -51,6 +52,36 @@ import { CityBudgetCard } from '@/components/city/CityBudgetCard';
 import { CityHighlightsMap } from '@/components/city/CityHighlightsMap';
 
 type TabKey = 'highlights' | 'budget' | 'practical';
+
+// -- Address geocoding helper -------------------------------------------------
+
+async function geocodeAddress(
+  address: string,
+  cityContext: string
+): Promise<{ lat: number; lon: number } | null> {
+  const key = process.env.EXPO_PUBLIC_LOCATIONIQ_KEY;
+  if (!key || !address.trim()) return null;
+
+  // Always include the city context — never geocode an address alone
+  // "Champs Elysées" alone resolves to Brazil; "Champs Elysées, Paris, France" resolves correctly
+  const queries = [`${address.trim()}, ${cityContext}`];
+
+  for (const query of queries) {
+    try {
+      const res = await fetch(
+        `https://us1.locationiq.com/v1/search?key=${key}&q=${encodeURIComponent(query)}&format=json`,
+        { headers: { Accept: 'application/json' } }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.length > 0) {
+          return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+        }
+      }
+    } catch {}
+  }
+  return null;
+}
 
 // -- SpinningLoader -----------------------------------------------------------
 
@@ -135,12 +166,16 @@ export default function CityDetailPage() {
     category: 'other',
     address: '',
   });
+  const [addAddrStatus, setAddAddrStatus] = useState<null | 'loading' | 'found' | 'not_found'>(null);
+  const [addAddrCoords, setAddAddrCoords] = useState<{ lat: number; lon: number } | null>(null);
 
   // Edit highlight state
   const [editingHighlight, setEditingHighlight] = useState<Highlight | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
   const [editForm, setEditForm] = useState<HighlightUpdatePayload>({});
+  const [editAddrStatus, setEditAddrStatus] = useState<null | 'loading' | 'found' | 'not_found'>(null);
+  const [editAddrCoords, setEditAddrCoords] = useState<{ lat: number; lon: number } | null>(null);
 
   // Load city data
   useEffect(() => {
@@ -212,10 +247,20 @@ export default function CityDetailPage() {
 
     setAddingHighlight(true);
     try {
+      // Geocode address now if not already resolved
+      let coords = addAddrCoords;
+      const addr = newHighlight.address?.trim();
+      if (addr && !coords && addAddrStatus !== 'not_found') {
+        const cityContext = [city?.city_name, city?.country].filter(Boolean).join(', ');
+        coords = await geocodeAddress(addr, cityContext);
+      }
+
       const created = await createHighlight(cityId, {
         ...newHighlight,
         name: newHighlight.name.trim(),
-        address: newHighlight.address?.trim() || undefined,
+        address: addr || undefined,
+        latitude: coords?.lat,
+        longitude: coords?.lon,
       });
       // Add to local state
       setCity((prev) => {
@@ -229,13 +274,15 @@ export default function CityDetailPage() {
       });
       // Reset form and close modal
       setNewHighlight({ name: '', category: 'other', address: '' });
+      setAddAddrCoords(null);
+      setAddAddrStatus(null);
       setShowAddModal(false);
     } catch (err: any) {
       Alert.alert('Erreur', err.message || 'Impossible de créer le point');
     } finally {
       setAddingHighlight(false);
     }
-  }, [cityId, newHighlight]);
+  }, [cityId, newHighlight, addAddrCoords, addAddrStatus, city]);
 
   // Open edit modal
   const handleOpenEdit = useCallback((highlight: Highlight) => {
@@ -250,6 +297,8 @@ export default function CityDetailPage() {
       tips: highlight.tips,
       is_must_see: highlight.is_must_see,
     });
+    setEditAddrCoords(null);
+    setEditAddrStatus(null);
     setShowEditModal(true);
   }, []);
 
@@ -259,26 +308,54 @@ export default function CityDetailPage() {
 
     setSavingEdit(true);
     try {
+      const addressChanged = editForm.address !== editingHighlight.address;
+
+      // Geocode if address changed and not yet resolved
+      let coords = editAddrCoords;
+      if (addressChanged && editForm.address?.trim() && !coords && editAddrStatus !== 'not_found') {
+        const cityContext = [city?.city_name, city?.country].filter(Boolean).join(', ');
+        coords = await geocodeAddress(editForm.address.trim(), cityContext);
+      }
+
       await updateHighlight(editingHighlight.id, editForm);
+
+      // Update coordinates if address changed and coords found
+      if (addressChanged && coords) {
+        await updateHighlightCoordinates(editingHighlight.id, coords.lat, coords.lon);
+      }
+
       // Update local state
       setCity((prev) => {
         if (!prev) return prev;
-        const updateHighlights = (highlights: Highlight[]) =>
-          highlights.map((h) => (h.id === editingHighlight.id ? { ...h, ...editForm } : h));
+        const updateHighlights = (hs: Highlight[]) =>
+          hs.map((h) =>
+            h.id === editingHighlight.id
+              ? {
+                  ...h,
+                  ...editForm,
+                  ...(addressChanged && coords
+                    ? { latitude: coords.lat, longitude: coords.lon }
+                    : {}),
+                }
+              : h
+          );
         return {
           ...prev,
           city_highlights: updateHighlights(prev.city_highlights || []),
           highlights: updateHighlights(prev.highlights || []),
         };
       });
+
       setShowEditModal(false);
       setEditingHighlight(null);
+      setEditAddrCoords(null);
+      setEditAddrStatus(null);
     } catch (err: any) {
       Alert.alert('Erreur', err.message || 'Impossible de modifier le point');
     } finally {
       setSavingEdit(false);
     }
-  }, [editingHighlight, editForm]);
+  }, [editingHighlight, editForm, editAddrCoords, editAddrStatus, city]);
 
   // Delete highlight
   const handleDeleteHighlight = useCallback(async (highlightId: string) => {
@@ -522,18 +599,56 @@ export default function CityDetailPage() {
                 <Text className="text-xs text-zinc-500 uppercase mb-1">Adresse</Text>
                 <TextInput
                   value={newHighlight.address ?? ''}
-                  onChangeText={(v) => setNewHighlight((f) => ({ ...f, address: v }))}
-                  placeholder="Optionnel"
+                  onChangeText={(v) => {
+                    setNewHighlight((f) => ({ ...f, address: v }));
+                    setAddAddrCoords(null);
+                    setAddAddrStatus(null);
+                  }}
+                  onEndEditing={(e) => {
+                    const addr = e.nativeEvent.text.trim();
+                    if (!addr || !city) return;
+                    setAddAddrStatus('loading');
+                    const ctx = [city.city_name, city.country].filter(Boolean).join(', ');
+                    geocodeAddress(addr, ctx).then((coords) => {
+                      setAddAddrCoords(coords);
+                      setAddAddrStatus(coords ? 'found' : 'not_found');
+                    });
+                  }}
+                  placeholder="Ex: 15 rue de Rivoli, Paris"
                   placeholderTextColor="#52525b"
                   className="rounded-lg px-3 py-3 text-white"
-                  style={{ backgroundColor: '#27272a', borderWidth: 1, borderColor: '#3f3f46' }}
+                  style={{
+                    backgroundColor: '#27272a',
+                    borderWidth: 1,
+                    borderColor:
+                      addAddrStatus === 'found'
+                        ? '#22c55e66'
+                        : addAddrStatus === 'not_found'
+                        ? '#f59e0b66'
+                        : '#3f3f46',
+                  }}
                 />
+                {addAddrStatus === 'loading' && (
+                  <Text style={{ fontSize: 11, color: '#71717a', marginTop: 4 }}>
+                    Vérification de l'adresse...
+                  </Text>
+                )}
+                {addAddrStatus === 'found' && (
+                  <Text style={{ fontSize: 11, color: '#22c55e', marginTop: 4 }}>
+                    ✓ Position localisée
+                  </Text>
+                )}
+                {addAddrStatus === 'not_found' && (
+                  <Text style={{ fontSize: 11, color: '#f59e0b', marginTop: 4 }}>
+                    ⚠ Adresse non trouvée – sera localisée automatiquement
+                  </Text>
+                )}
               </View>
 
               {/* Submit */}
               <TouchableOpacity
                 onPress={handleAddHighlight}
-                disabled={addingHighlight || !newHighlight.name.trim()}
+                disabled={addingHighlight || !newHighlight.name.trim() || addAddrStatus === 'loading'}
                 className="flex-row items-center justify-center gap-2 py-3 rounded-xl mt-2"
                 style={{
                   backgroundColor: '#a855f7',
@@ -635,12 +750,52 @@ export default function CityDetailPage() {
                 <Text className="text-xs text-zinc-500 uppercase mb-1">Adresse</Text>
                 <TextInput
                   value={editForm.address ?? ''}
-                  onChangeText={(v) => setEditForm((f) => ({ ...f, address: v || undefined }))}
-                  placeholder="Optionnel"
+                  onChangeText={(v) => {
+                    setEditForm((f) => ({ ...f, address: v || undefined }));
+                    setEditAddrCoords(null);
+                    setEditAddrStatus(null);
+                  }}
+                  onEndEditing={(e) => {
+                    const addr = e.nativeEvent.text.trim();
+                    if (!addr || !city) return;
+                    // Only geocode if address actually changed
+                    if (addr === editingHighlight?.address) return;
+                    setEditAddrStatus('loading');
+                    const ctx = [city.city_name, city.country].filter(Boolean).join(', ');
+                    geocodeAddress(addr, ctx).then((coords) => {
+                      setEditAddrCoords(coords);
+                      setEditAddrStatus(coords ? 'found' : 'not_found');
+                    });
+                  }}
+                  placeholder="Ex: 15 rue de Rivoli, Paris"
                   placeholderTextColor="#52525b"
                   className="rounded-lg px-3 py-3 text-white"
-                  style={{ backgroundColor: '#27272a', borderWidth: 1, borderColor: '#3f3f46' }}
+                  style={{
+                    backgroundColor: '#27272a',
+                    borderWidth: 1,
+                    borderColor:
+                      editAddrStatus === 'found'
+                        ? '#22c55e66'
+                        : editAddrStatus === 'not_found'
+                        ? '#f59e0b66'
+                        : '#3f3f46',
+                  }}
                 />
+                {editAddrStatus === 'loading' && (
+                  <Text style={{ fontSize: 11, color: '#71717a', marginTop: 4 }}>
+                    Vérification de l'adresse...
+                  </Text>
+                )}
+                {editAddrStatus === 'found' && (
+                  <Text style={{ fontSize: 11, color: '#22c55e', marginTop: 4 }}>
+                    ✓ Position localisée
+                  </Text>
+                )}
+                {editAddrStatus === 'not_found' && (
+                  <Text style={{ fontSize: 11, color: '#f59e0b', marginTop: 4 }}>
+                    ⚠ Adresse non trouvée – sera localisée automatiquement
+                  </Text>
+                )}
               </View>
 
               {/* Description */}
@@ -708,7 +863,7 @@ export default function CityDetailPage() {
               {/* Submit */}
               <TouchableOpacity
                 onPress={handleSaveEdit}
-                disabled={savingEdit || !editForm.name?.trim()}
+                disabled={savingEdit || !editForm.name?.trim() || editAddrStatus === 'loading'}
                 className="flex-row items-center justify-center gap-2 py-3 rounded-xl mt-2"
                 style={{
                   backgroundColor: '#a855f7',

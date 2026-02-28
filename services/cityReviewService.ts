@@ -51,6 +51,8 @@ export interface CreateHighlightPayload {
   price_range?: string;
   tips?: string;
   is_must_see?: boolean;
+  latitude?: number;
+  longitude?: number;
 }
 
 /**
