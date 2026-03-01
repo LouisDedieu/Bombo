@@ -23,7 +23,7 @@ import {
   RenderItemParams,
 } from 'react-native-draggable-flatlist';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { InteractiveHeroMap } from '@/components/InteractiveHeroMap';
 import {
   X,
@@ -85,6 +85,10 @@ interface DbSpot {
   google_place_id: string | null;
   spot_order: number;
   verified: boolean;
+  // Lien vers la ville source (pour navigation et sync)
+  source_city_id: string | null;
+  city_highlight_id: string | null;
+  _synced_from_highlight?: boolean;
 }
 
 interface DbDay {
@@ -100,6 +104,8 @@ interface DbDay {
   lunch_spot: string | null;
   dinner_spot: string | null;
   spots: DbSpot[];
+  // Lien vers la ville source pour sync automatique
+  linked_city_id: string | null;
 }
 
 interface DbLogistics {
@@ -222,17 +228,29 @@ export default function TripDetailPage() {
   const [pendingDestinations, setPendingDestinations] = useState<Destination[]>([]);
   const [isSavingOrder, setIsSavingOrder] = useState(false);
 
-  const loadTrip = () => {
+  const loadTrip = useCallback((showLoading = false) => {
     if (!tripId) return;
+    if (showLoading) setLoading(true);
     getTrip(tripId)
       .then((data) => setTrip(data as FullTrip))
       .catch(console.error)
       .finally(() => setLoading(false));
-  };
-
-  useEffect(() => {
-    loadTrip();
   }, [tripId]);
+
+  // Charger le trip initialement
+  useEffect(() => {
+    loadTrip(true);
+  }, [tripId]);
+
+  // Recharger quand la page reprend le focus (retour de cityDetails, etc.)
+  useFocusEffect(
+    useCallback(() => {
+      // Ne pas recharger si c'est le premier mount (loading est true)
+      if (!loading && tripId) {
+        loadTrip(false);
+      }
+    }, [tripId, loading, loadTrip])
+  );
 
   // Load saved cities to create a mapping
   useEffect(() => {
@@ -300,16 +318,13 @@ export default function TripDetailPage() {
         await Promise.all(deletedIds.map(id => deleteDestination(tripId, id)));
       }
 
-      // Puis mettre à jour l'ordre des restantes
+      // Puis mettre à jour l'ordre des restantes (backend met aussi à jour les days)
       await reorderDestinations(tripId, {
         destinations: pendingDestinations.map((d, idx) => ({ id: d.id, order: idx + 1 })),
       });
 
-      setTrip((prev) => {
-        if (!prev) return prev;
-        const updated = pendingDestinations.map((d, idx) => ({ ...d, visit_order: idx + 1 }));
-        return { ...prev, destinations: updated };
-      });
+      // Recharger les données depuis le backend pour avoir les days réordonnés
+      loadTrip(false);
       setIsEditingOrder(false);
       setPendingDestinations([]);
     } catch {
@@ -317,7 +332,7 @@ export default function TripDetailPage() {
     } finally {
       setIsSavingOrder(false);
     }
-  }, [tripId, pendingDestinations, derived?.destinations]);
+  }, [tripId, pendingDestinations, derived?.destinations, loadTrip]);
 
   if (loading) {
     return (
@@ -1034,14 +1049,18 @@ export default function TripDetailPage() {
 function DayCard({ day, isExpanded, onToggle }: {
   day: DbDay; isExpanded: boolean; onToggle: () => void;
 }) {
+  const router = useRouter();
   const sortedSpots = useMemo(
     () => [...(day.spots ?? [])].sort((a, b) => (a.spot_order ?? 0) - (b.spot_order ?? 0)),
     [day.spots]
   );
   const hasMeals = day.breakfast_spot || day.lunch_spot || day.dinner_spot;
+  const isLinkedToCity = !!day.linked_city_id;
 
   return (
-    <View className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
+    <View className={`bg-zinc-900 rounded-xl border overflow-hidden ${
+      isLinkedToCity ? 'border-purple-500/30' : 'border-zinc-800'
+    }`}>
       {/* Header */}
       <TouchableOpacity
         onPress={onToggle}
@@ -1053,9 +1072,22 @@ function DayCard({ day, isExpanded, onToggle }: {
         </View>
 
         <View className="flex-1">
-          <Text className="text-sm font-semibold text-white" numberOfLines={1}>
-            {day.location ?? `Jour ${day.day_number}`}
-          </Text>
+          <View className="flex-row items-center gap-1.5">
+            <Text className="text-sm font-semibold text-white" numberOfLines={1}>
+              {day.location ?? `Jour ${day.day_number}`}
+            </Text>
+            {isLinkedToCity && (
+              <TouchableOpacity
+                onPress={() => router.push(`/(tabs)/trips/city/${day.linked_city_id}`)}
+                hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+              >
+                <View className="bg-purple-500/20 border border-purple-500/30 rounded px-1.5 py-0.5 flex-row items-center gap-0.5">
+                  <Building2 size={10} color="#a855f7" />
+                  <Text className="text-[10px] text-purple-400">Sync</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
 
         <View className="flex-row items-center gap-2">
@@ -1134,7 +1166,9 @@ function DayCard({ day, isExpanded, onToggle }: {
 }
 
 function SpotCard({ spot }: { spot: DbSpot }) {
+  const router = useRouter();
   const priceCfg = spot.price_range ? PRICE_CONFIG[spot.price_range] : null;
+  const isSynced = spot._synced_from_highlight && spot.source_city_id;
 
   const openMap = () => {
     const lat = spot.latitude;
@@ -1226,6 +1260,15 @@ function SpotCard({ spot }: { spot: DbSpot }) {
                 <View className="bg-emerald-400/10 border border-emerald-400/20 rounded px-1">
                   <Text className="text-[10px] text-emerald-400">✓</Text>
                 </View>
+              )}
+              {isSynced && (
+                <TouchableOpacity
+                  onPress={() => router.push(`/(tabs)/trips/city/${spot.source_city_id}`)}
+                  className="bg-purple-500/10 border border-purple-500/20 rounded px-1.5 py-0.5 flex-row items-center gap-0.5"
+                >
+                  <Building2 size={10} color="#a855f7" />
+                  <Text className="text-[10px] text-purple-400">City</Text>
+                </TouchableOpacity>
               )}
             </View>
             {(spot.latitude && spot.longitude || spot.address) && (

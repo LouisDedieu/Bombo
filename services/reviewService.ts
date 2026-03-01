@@ -13,6 +13,10 @@ export interface DbSpot {
   highlight: boolean;
   latitude: number | null;
   longitude: number | null;
+  // Lien vers la ville source (pour navigation et sync)
+  source_city_id: string | null;
+  city_highlight_id: string | null;
+  _synced_from_highlight?: boolean;
 }
 
 export interface DbDay {
