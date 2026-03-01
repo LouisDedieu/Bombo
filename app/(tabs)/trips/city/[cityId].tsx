@@ -18,7 +18,7 @@ import {
   Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import {
   ChevronLeft,
   Building2,
@@ -178,22 +178,32 @@ export default function CityDetailPage() {
   const [editAddrCoords, setEditAddrCoords] = useState<{ lat: number; lon: number } | null>(null);
 
   // Load city data
-  useEffect(() => {
+  const loadCity = useCallback(async (showLoading = false) => {
     if (!cityId) return;
-
-    const loadCity = async () => {
-      try {
-        const data = await getCity(cityId);
-        setCity(data);
-      } catch (err: any) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadCity();
+    if (showLoading) setLoading(true);
+    try {
+      const data = await getCity(cityId);
+      setCity(data);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   }, [cityId]);
+
+  // Initial load
+  useEffect(() => {
+    loadCity(true);
+  }, [cityId]);
+
+  // Reload when page regains focus (returning from another screen)
+  useFocusEffect(
+    useCallback(() => {
+      if (!loading && cityId) {
+        loadCity(false);
+      }
+    }, [cityId, loading, loadCity])
+  );
 
   // Get highlights from city data
   const highlights = useMemo(() => {
@@ -398,7 +408,7 @@ export default function CityDetailPage() {
       >
         <Text className="text-red-400">{error || 'City not found'}</Text>
         <TouchableOpacity
-          onPress={() => router.navigate('/(tabs)/trips')}
+          onPress={() => router.back()}
           className="mt-4 px-4 py-2 bg-zinc-800 rounded-lg"
         >
           <Text className="text-white">Go back</Text>
@@ -417,7 +427,7 @@ export default function CityDetailPage() {
         {/* Top row: Back */}
         <View className="flex-row items-center mb-3">
           <TouchableOpacity
-            onPress={() => router.navigate('/(tabs)/trips')}
+            onPress={() => router.back()}
             className="flex-row items-center gap-1"
           >
             <ChevronLeft size={24} color="#fff" />
