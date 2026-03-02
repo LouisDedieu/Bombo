@@ -1,21 +1,21 @@
 {
   "expo": {
-    "name": "BomboMobile",
-    "slug": "BomboMobile",
+    "name": "Oneday",
+    "slug": "oneday",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "bombomobile",
+    "scheme": "oneday",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.BomboMobile",
+      "bundleIdentifier": "com.oneday.app",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       },
       "entitlements": {
-        "com.apple.security.application-groups": ["group.com.anonymous.BomboMobile.shared"]
+        "com.apple.security.application-groups": ["group.com.oneday.app.shared"]
       }
     },
     "android": {
@@ -27,7 +27,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.BomboMobile"
+      "package": "com.oneday.app"
     },
     "web": {
       "output": "static",
