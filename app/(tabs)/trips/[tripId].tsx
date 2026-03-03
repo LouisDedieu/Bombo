@@ -16,7 +16,7 @@ import {
   Alert,
 } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import {
+import DraggableFlatList, {
   NestableScrollContainer,
   NestableDraggableFlatList,
   ScaleDecorator,
@@ -57,6 +57,7 @@ import {
   GripVertical,
   Check,
   Trash2,
+  X,
 } from 'lucide-react-native';
 import { getTrip } from '@/services/tripService';
 import { getUserSavedCities } from '@/services/cityService';
@@ -308,27 +309,25 @@ export default function TripDetailPage() {
     }
     setIsSavingOrder(true);
     try {
-      // Destinations supprimées dans l'UI = présentes dans l'original mais absentes du pending
       const originalIds = new Set(derived?.destinations.map(d => d.id) ?? []);
       const pendingIds = new Set(pendingDestinations.map(d => d.id));
       const deletedIds = [...originalIds].filter(id => !pendingIds.has(id));
 
-      // Supprimer d'abord les destinations retirées
       if (deletedIds.length > 0) {
         await Promise.all(deletedIds.map(id => deleteDestination(tripId, id)));
       }
 
-      // Puis mettre à jour l'ordre des restantes (backend met aussi à jour les days)
       await reorderDestinations(tripId, {
         destinations: pendingDestinations.map((d, idx) => ({ id: d.id, order: idx + 1 })),
       });
 
-      // Recharger les données depuis le backend pour avoir les days réordonnés
       loadTrip(false);
       setIsEditingOrder(false);
       setPendingDestinations([]);
-    } catch {
-      Alert.alert('Erreur', "Impossible de sauvegarder les modifications. Réessayez.");
+    } catch (err) {
+      console.error('[confirmOrder] Error:', err);
+      const message = err instanceof Error ? err.message : 'Erreur inconnue';
+      Alert.alert('Erreur', `Impossible de sauvegarder: ${message}`);
     } finally {
       setIsSavingOrder(false);
     }
@@ -553,11 +552,33 @@ export default function TripDetailPage() {
                       <Text style={{ fontSize: 11, color: '#a1a1aa' }}>Réordonner</Text>
                     </TouchableOpacity>
                   ) : (
-                    <Text className="text-[10px] text-zinc-600">Maintenir pour glisser</Text>
+                    <View className="flex-row items-center gap-2">
+                      <TouchableOpacity
+                        onPress={cancelEditMode}
+                        disabled={isSavingOrder}
+                        className="p-1.5 rounded-lg"
+                        style={{ backgroundColor: '#27272a' }}
+                      >
+                        <X size={16} color="#a1a1aa" />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={confirmOrder}
+                        disabled={isSavingOrder}
+                        className="flex-row items-center gap-1 px-2.5 py-1.5 rounded-lg"
+                        style={{ backgroundColor: '#2563eb', opacity: isSavingOrder ? 0.6 : 1 }}
+                      >
+                        {isSavingOrder ? (
+                          <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                          <Check size={14} color="#fff" />
+                        )}
+                        <Text style={{ fontSize: 11, color: '#fff', fontWeight: '500' }}>OK</Text>
+                      </TouchableOpacity>
+                    </View>
                   )}
                 </View>
 
-                {/* Vue normale — liste statique */}
+                {/* Mode normal - liste statique */}
                 {!isEditingOrder && destinations.map((dest, i) => {
                   const savedCityId = getSavedCityId(dest.city);
                   return (
@@ -596,106 +617,86 @@ export default function TripDetailPage() {
                   );
                 })}
 
-                {/* Mode édition — liste draggable */}
+                {/* Mode édition - liste draggable */}
                 {isEditingOrder && (
-                  <>
-                    <NestableDraggableFlatList
-                      data={pendingDestinations}
-                      keyExtractor={(item) => item.id}
-                      onDragEnd={({ data }) => setPendingDestinations(data)}
-                      scrollEnabled={false}
-                      renderItem={({ item: dest, drag, isActive, getIndex }: RenderItemParams<Destination>) => {
-                        const i = getIndex() ?? 0;
-                        return (
-                          <ScaleDecorator activeScale={0.97}>
-                            <View
-                              className="flex-row gap-3 pb-3"
-                              style={{ opacity: isActive ? 0.75 : 1 }}
-                            >
-                              <View className="items-center">
-                                <View className="w-7 h-7 rounded-full bg-blue-500/20 border border-blue-500/40 items-center justify-center">
-                                  <Text className="text-blue-400 text-xs font-bold">{i + 1}</Text>
-                                </View>
-                                {i < pendingDestinations.length - 1 && (
-                                  <View className="w-px flex-1 bg-zinc-700 mt-1" />
-                                )}
-                              </View>
-                              <View className="flex-1 pt-1 flex-row items-center justify-between">
-                                <View className="flex-1">
-                                  <Text className="text-sm font-medium text-white">
-                                    {[dest.city, dest.country].filter(Boolean).join(', ')}
-                                  </Text>
-                                  {dest.days_spent && (
-                                    <Text className="text-xs text-zinc-500 mt-0.5">
-                                      {dest.days_spent} jour{dest.days_spent > 1 ? 's' : ''}
-                                    </Text>
-                                  )}
-                                </View>
-                                <View className="flex-row items-center gap-3">
-                                  <TouchableOpacity
-                                    onPress={() => {
-                                      Alert.alert(
-                                        'Supprimer cette ville ?',
-                                        `${dest.city} et tous ses jours seront supprimés de l'itinéraire.`,
-                                        [
-                                          { text: 'Annuler', style: 'cancel' },
-                                          {
-                                            text: 'Supprimer',
-                                            style: 'destructive',
-                                            onPress: () =>
-                                              setPendingDestinations(prev =>
-                                                prev.filter(d => d.id !== dest.id)
-                                              ),
-                                          },
-                                        ]
-                                      );
-                                    }}
-                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                  >
-                                    <Trash2 size={16} color="#f87171" />
-                                  </TouchableOpacity>
-                                  <TouchableOpacity
-                                    onLongPress={drag}
-                                    delayLongPress={100}
-                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                  >
-                                    <GripVertical size={18} color="#71717a" />
-                                  </TouchableOpacity>
-                                </View>
+                  <NestableDraggableFlatList
+                    data={pendingDestinations}
+                    keyExtractor={(item) => item.id}
+                    onDragEnd={({ data }) => setPendingDestinations(data)}
+                    renderItem={({ item: dest, drag, isActive, getIndex }: RenderItemParams<Destination>) => {
+                      const i = getIndex() ?? 0;
+                      return (
+                        <ScaleDecorator activeScale={0.95}>
+                          <TouchableOpacity
+                            activeOpacity={0.7}
+                            onLongPress={drag}
+                            delayLongPress={100}
+                            disabled={isActive}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              backgroundColor: isActive ? '#27272a' : 'transparent',
+                              borderRadius: 8,
+                              paddingVertical: 8,
+                              paddingHorizontal: 4,
+                              marginBottom: 4,
+                            }}
+                          >
+                            <View style={{ alignItems: 'center', marginRight: 12 }}>
+                              <View
+                                style={{
+                                  width: 28,
+                                  height: 28,
+                                  borderRadius: 14,
+                                  backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                                  borderWidth: 1,
+                                  borderColor: 'rgba(59, 130, 246, 0.4)',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                }}
+                              >
+                                <Text style={{ color: '#60a5fa', fontSize: 12, fontWeight: 'bold' }}>
+                                  {i + 1}
+                                </Text>
                               </View>
                             </View>
-                          </ScaleDecorator>
-                        );
-                      }}
-                    />
-
-                    {/* Confirmer / Annuler */}
-                    <View
-                      className="flex-row gap-2 mt-1 pt-3"
-                      style={{ borderTopWidth: 1, borderTopColor: '#27272a' }}
-                    >
-                      <TouchableOpacity
-                        onPress={cancelEditMode}
-                        disabled={isSavingOrder}
-                        className="flex-1 items-center py-2 rounded-lg"
-                        style={{ backgroundColor: '#27272a', borderWidth: 1, borderColor: '#3f3f46' }}
-                      >
-                        <Text style={{ fontSize: 13, color: '#a1a1aa', fontWeight: '500' }}>Annuler</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={confirmOrder}
-                        disabled={isSavingOrder}
-                        className="flex-1 flex-row items-center justify-center gap-1.5 py-2 rounded-lg"
-                        style={{ backgroundColor: '#2563eb', opacity: isSavingOrder ? 0.6 : 1 }}
-                      >
-                        {isSavingOrder
-                          ? <ActivityIndicator size="small" color="#fff" />
-                          : <Check size={13} color="#fff" />
-                        }
-                        <Text style={{ fontSize: 13, color: '#fff', fontWeight: '600' }}>Confirmer</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </>
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ color: '#fff', fontSize: 14, fontWeight: '500' }}>
+                                {[dest.city, dest.country].filter(Boolean).join(', ')}
+                              </Text>
+                              {dest.days_spent && (
+                                <Text style={{ color: '#71717a', fontSize: 12, marginTop: 2 }}>
+                                  {dest.days_spent} jour{dest.days_spent > 1 ? 's' : ''}
+                                </Text>
+                              )}
+                            </View>
+                            <TouchableOpacity
+                              onPress={() => {
+                                Alert.alert(
+                                  'Supprimer cette ville ?',
+                                  `${dest.city} sera supprimée de l'itinéraire.`,
+                                  [
+                                    { text: 'Annuler', style: 'cancel' },
+                                    {
+                                      text: 'Supprimer',
+                                      style: 'destructive',
+                                      onPress: () => setPendingDestinations(prev => prev.filter(d => d.id !== dest.id)),
+                                    },
+                                  ]
+                                );
+                              }}
+                              style={{ padding: 8 }}
+                            >
+                              <Trash2 size={16} color="#f87171" />
+                            </TouchableOpacity>
+                            <View style={{ padding: 8 }}>
+                              <GripVertical size={18} color={isActive ? '#60a5fa' : '#71717a'} />
+                            </View>
+                          </TouchableOpacity>
+                        </ScaleDecorator>
+                      );
+                    }}
+                  />
                 )}
               </View>
             )}
