@@ -33,7 +33,6 @@ export default function NotFound() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000000',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,

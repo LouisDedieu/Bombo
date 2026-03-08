@@ -631,7 +631,7 @@ export default function ReviewModePage() {
 
   if (loading) {
     return (
-      <View className="flex-1 bg-black items-center justify-center">
+      <View className="flex-1 items-center justify-center">
         <SpinningLoader size={32} color="#60a5fa" />
       </View>
     );
@@ -639,7 +639,7 @@ export default function ReviewModePage() {
 
   if (!trip) {
     return (
-      <View className="flex-1 bg-black items-center justify-center gap-4">
+      <View className="flex-1 items-center justify-center gap-4">
         <Text className="text-zinc-400">Voyage introuvable</Text>
         <Button onPress={() => router.back()}>Retour</Button>
       </View>
@@ -660,7 +660,7 @@ export default function ReviewModePage() {
       : '#16a34a';  // green-600
 
   return (
-    <View className="flex-1 bg-black">
+    <View className="flex-1">
 
       {/* ── Header ── */}
       {/* web: sticky bg-zinc-900/95 backdrop-blur border-b border-zinc-800 */}

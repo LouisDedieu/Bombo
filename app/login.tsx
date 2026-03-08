@@ -20,9 +20,9 @@ import {
   KeyboardAvoidingView,
   Platform,
   Animated,
-  ActivityIndicator,
  Linking } from 'react-native';
 import { Eye, EyeOff, ArrowLeft, MailCheck, AlertCircle, CheckCircle2 } from 'lucide-react-native';
+import Loader from '@/components/Loader';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import {useAuth} from "@/context/AuthContext";
 
@@ -287,8 +287,8 @@ export default function Login() {
   // ── Loading (vérification session initiale) ────────────────────────────────
   if (status === 'loading') {
     return (
-      <View className="flex-1 bg-black items-center justify-center p-6">
-        <ActivityIndicator size="large" color="#60a5fa" />
+      <View className="flex-1 items-center justify-center p-6">
+        <Loader size={48} />
       </View>
     );
   }
@@ -296,7 +296,7 @@ export default function Login() {
   // ── Email envoyé (signup) ──────────────────────────────────────────────────
   if (emailSent) {
     return (
-      <View className="flex-1 bg-black items-center justify-center p-6">
+      <View className="flex-1 items-center justify-center p-6">
         {/* Icône */}
         <View className="w-16 h-16 rounded-full items-center justify-center mb-4 bg-blue-500/10 border border-blue-500/20">
           <MailCheck size={28} color="#60a5fa" />
@@ -332,7 +332,7 @@ export default function Login() {
             activeOpacity={0.8}
           >
             {resending
-              ? <ActivityIndicator size="small" color="#a1a1aa" />
+              ? <Loader size={24} color="#a1a1aa" />
               : <Text className="text-zinc-400 text-[13px] font-medium">
                 Renvoyer l'email de confirmation
               </Text>
@@ -363,7 +363,7 @@ export default function Login() {
   // ── Reset envoyé ───────────────────────────────────────────────────────────
   if (resetSent) {
     return (
-      <View className="flex-1 bg-black items-center justify-center p-6">
+      <View className="flex-1 items-center justify-center p-6">
         {/* Icône */}
         <View className="w-16 h-16 rounded-full items-center justify-center mb-4 bg-emerald-500/10 border border-emerald-500/20">
           <MailCheck size={28} color="#34d399" />
@@ -403,7 +403,7 @@ export default function Login() {
   // ── Main form ──────────────────────────────────────────────────────────────
   return (
     <KeyboardAvoidingView
-      className="flex-1 bg-black"
+      className="flex-1"
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView
@@ -524,7 +524,7 @@ export default function Login() {
             activeOpacity={0.85}
           >
             {loading
-              ? <ActivityIndicator size="small" color="#ffffff" />
+              ? <Loader size={24} color="#ffffff" />
               : <Text className="text-white text-[15px] font-semibold">
                 {flow === 'signin' ? 'Se connecter'
                   : flow === 'signup' ? 'Créer mon compte'
@@ -549,7 +549,7 @@ export default function Login() {
                 activeOpacity={0.8}
               >
                 {socialLoading
-                  ? <ActivityIndicator size="small" color="#a1a1aa" />
+                  ? <Loader size={24} color="#a1a1aa" />
                   : <>
                       <Text style={{ fontSize: 16, fontWeight: '700', color: '#fff' }}>G</Text>
                       <Text className="text-zinc-300 text-[15px] font-medium">Continuer avec Google</Text>
@@ -566,7 +566,7 @@ export default function Login() {
                   activeOpacity={0.8}
                 >
                   {appleLoading
-                    ? <ActivityIndicator size="small" color="#a1a1aa" />
+                    ? <Loader size={24} color="#a1a1aa" />
                     : <>
                         <Text style={{ fontSize: 18, color: '#fff' }}></Text>
                         <Text className="text-zinc-300 text-[15px] font-medium">Continuer avec Apple</Text>

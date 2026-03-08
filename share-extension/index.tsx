@@ -1,7 +1,8 @@
 import { useEffect, useState, useMemo } from 'react';
-import { StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { StyleSheet, TouchableOpacity } from 'react-native';
 import { close, Text, View, type InitialProps } from 'expo-share-extension';
 import * as SecureStore from 'expo-secure-store';
+import Loader from '../components/Loader';
 
 const API_BASE: string =
   process.env.EXPO_PUBLIC_API_BASE ?? 'http://localhost:8000';
@@ -174,7 +175,7 @@ export default function ShareScreen(props: InitialProps) {
   if (phase === 'init') {
     return (
       <View style={styles.container}>
-        <ActivityIndicator size="large" color="#60a5fa" />
+        <Loader size={48} />
         <Text style={styles.label}>Chargement...</Text>
       </View>
     );
@@ -242,7 +243,7 @@ export default function ShareScreen(props: InitialProps) {
   return (
     <View style={styles.container}>
       {phase === 'loading' ? (
-        <ActivityIndicator size="large" color="#60a5fa" />
+        <Loader size={48} />
       ) : (
         <Text style={styles.icon}>
           {phase === 'success' ? '✓' : phase === 'error' ? '✕' : '−'}

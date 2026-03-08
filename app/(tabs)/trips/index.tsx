@@ -13,23 +13,26 @@ import {
   FlatList,
   RefreshControl,
   Image,
+  ImageBackground,
   Animated,
   Easing,
   Alert,
   Platform,
 } from 'react-native';
+import { Navbar } from '@/components/navigation/Navbar';
+import Loader from '@/components/Loader';
+import { colors } from '@/constants/colors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
 
 // Check if using native tabs (iOS 26+) which handles safe area automatically
 const isExpoGo = Constants.appOwnership === 'expo';
 const useNativeTabs = Platform.OS === 'ios' && parseInt(String(Platform.Version), 10) >= 26 && !isExpoGo;
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter } from 'expo-router';
 import {
   Map,
   MapPin,
   Calendar,
-  Loader2,
   Bookmark,
   Trash2,
   Building2,
@@ -41,7 +44,6 @@ import { deleteCity } from '@/services/cityService';
 import {
   getUserSavedItems,
   SavedItem,
-  SavedFilter,
   getEntityAccentColor,
 } from '@/services/savedService';
 
@@ -58,87 +60,19 @@ function timeAgo(dateString: string): string {
   return `Il y a ${Math.floor(diffDays / 30)} mois`;
 }
 
-// -- SpinningLoader -----------------------------------------------------------
 
-function SpinningLoader({ size = 32, color = '#60a5fa' }: { size?: number; color?: string }) {
-  const rotation = useRef(new Animated.Value(0)).current;
+// -- Filter type (without 'all') ----------------------------------------------
 
-  useEffect(() => {
-    Animated.loop(
-      Animated.timing(rotation, {
-        toValue: 1,
-        duration: 1000,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      })
-    ).start();
-  }, []);
-
-  const spin = rotation.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
-
-  return (
-    <Animated.View style={{ transform: [{ rotate: spin }] }}>
-      <Loader2 size={size} color={color} />
-    </Animated.View>
-  );
-}
-
-// -- Filter Tabs --------------------------------------------------------------
-
-function FilterTabs({
-  filter,
-  onFilterChange,
-}: {
-  filter: SavedFilter;
-  onFilterChange: (f: SavedFilter) => void;
-}) {
-  const filters: { key: SavedFilter; label: string }[] = [
-    { key: 'all', label: 'All' },
-    { key: 'trip', label: 'Trips' },
-    { key: 'city', label: 'Cities' },
-  ];
-
-  return (
-    <View
-      className="flex-row border-b border-zinc-800"
-      style={{ paddingHorizontal: 16 }}
-    >
-      {filters.map(({ key, label }) => (
-        <TouchableOpacity
-          key={key}
-          onPress={() => onFilterChange(key)}
-          className="flex-1 py-3"
-          style={{
-            borderBottomWidth: filter === key ? 2 : 0,
-            borderBottomColor: filter === key ? '#3b82f6' : 'transparent',
-          }}
-        >
-          <Text
-            className={`text-center text-sm font-medium ${
-              filter === key ? 'text-blue-400' : 'text-zinc-500'
-            }`}
-          >
-            {label}
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-  );
-}
+type FilterType = 'trip' | 'city';
 
 // -- EntityCard ---------------------------------------------------------------
 
 function EntityCard({
   item,
-  animIndex,
   onPress,
   onDelete,
 }: {
   item: SavedItem;
-  animIndex: number;
   onPress: () => void;
   onDelete: () => void;
 }) {
@@ -156,31 +90,8 @@ function EntityCard({
     );
   };
 
-  // Staggered entry animation
-  const opacity = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(20)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(opacity, {
-        toValue: 1,
-        duration: 300,
-        delay: animIndex * 80,
-        easing: Easing.out(Easing.ease),
-        useNativeDriver: true,
-      }),
-      Animated.timing(translateY, {
-        toValue: 0,
-        duration: 300,
-        delay: animIndex * 80,
-        easing: Easing.out(Easing.ease),
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, []);
-
   return (
-    <Animated.View style={{ opacity, transform: [{ translateY }] }}>
+    <View>
       <TouchableOpacity
         onPress={onPress}
         activeOpacity={0.8}
@@ -301,7 +212,7 @@ function EntityCard({
           </View>
         </View>
       </TouchableOpacity>
-    </Animated.View>
+    </View>
   );
 }
 
@@ -312,34 +223,51 @@ export default function SavedPage() {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
 
-  const [filter, setFilter] = useState<SavedFilter>('all');
-  const [items, setItems] = useState<SavedItem[]>([]);
+  const [filter, setFilter] = useState<FilterType>('trip');
+  const [activeTabIndex, setActiveTabIndex] = useState(0);
+
+  // Cache items per filter
+  const [tripItems, setTripItems] = useState<SavedItem[]>([]);
+  const [cityItems, setCityItems] = useState<SavedItem[]>([]);
+  const [tripLoaded, setTripLoaded] = useState(false);
+  const [cityLoaded, setCityLoaded] = useState(false);
+
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [filterLoading, setFilterLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Get current items based on filter
+  const items = filter === 'trip' ? tripItems : cityItems;
+
   const loadItems = useCallback(
-    async (pageNum: number, append = false) => {
+    async (pageNum: number, append = false, forceFilter?: FilterType) => {
+      const targetFilter = forceFilter ?? filter;
+      const targetSetItems = targetFilter === 'trip' ? setTripItems : setCityItems;
+      const targetSetLoaded = targetFilter === 'trip' ? setTripLoaded : setCityLoaded;
+
       if (!user) {
-        setLoading(false);
+        setInitialLoading(false);
         return;
       }
       try {
-        const response = await getUserSavedItems(user.id, filter, pageNum, 20);
+        const response = await getUserSavedItems(user.id, targetFilter, pageNum, 20);
         if (append) {
-          setItems((prev) => [...prev, ...response.items]);
+          targetSetItems((prev) => [...prev, ...response.items]);
         } else {
-          setItems(response.items);
+          targetSetItems(response.items);
         }
         setHasMore(response.has_more);
+        targetSetLoaded(true);
         setError(null);
       } catch (err: any) {
         setError(err.message);
       } finally {
-        setLoading(false);
+        setInitialLoading(false);
+        setFilterLoading(false);
         setRefreshing(false);
         setLoadingMore(false);
       }
@@ -347,44 +275,51 @@ export default function SavedPage() {
     [user, filter]
   );
 
-  // Initial load
+  // Initial load (trip)
   useEffect(() => {
-    setLoading(true);
-    setPage(1);
-    loadItems(1, false);
-  }, [filter, user]);
+    if (user && !tripLoaded) {
+      setPage(1);
+      loadItems(1, false, 'trip');
+    } else if (!user) {
+      setInitialLoading(false);
+    }
+  }, [user]);
 
-  // Reload on focus
-  useFocusEffect(
-    useCallback(() => {
-      loadItems(1, false);
-    }, [loadItems])
-  );
 
-  // Handle filter change
-  const handleFilterChange = (newFilter: SavedFilter) => {
+  // Handle tab change
+  const handleTabChange = (index: number) => {
+    setActiveTabIndex(index);
+    const newFilter: FilterType = index === 0 ? 'trip' : 'city';
     if (newFilter !== filter) {
       setFilter(newFilter);
       setPage(1);
-      setItems([]);
       setHasMore(true);
+
+      // Only load if not already loaded
+      const alreadyLoaded = newFilter === 'trip' ? tripLoaded : cityLoaded;
+      if (!alreadyLoaded) {
+        setFilterLoading(true);
+        loadItems(1, false, newFilter);
+      }
     }
   };
 
   // Load more (infinite scroll)
   const handleLoadMore = () => {
-    if (!hasMore || loadingMore || loading) return;
+    // Don't trigger if list is too short (less than a full page)
+    if (items.length < 20) return;
+    if (!hasMore || loadingMore || filterLoading) return;
     setLoadingMore(true);
     const nextPage = page + 1;
     setPage(nextPage);
-    loadItems(nextPage, true);
+    loadItems(nextPage, true, filter);
   };
 
-  // Refresh
+  // Refresh (pull-to-refresh)
   const handleRefresh = () => {
     setRefreshing(true);
     setPage(1);
-    loadItems(1, false);
+    loadItems(1, false, filter);
   };
 
   // Delete handler
@@ -392,10 +327,11 @@ export default function SavedPage() {
     try {
       if (item.entity_type === 'city') {
         await deleteCity(item.entity_id);
+        setCityItems((prev) => prev.filter((i) => i.id !== item.id));
       } else {
         await deleteTrip(item.entity_id);
+        setTripItems((prev) => prev.filter((i) => i.id !== item.id));
       }
-      setItems((prev) => prev.filter((i) => i.id !== item.id));
     } catch (err) {
       Alert.alert('Erreur', 'Impossible de supprimer.');
     }
@@ -410,47 +346,98 @@ export default function SavedPage() {
     }
   };
 
-  // Loading state
-  if (loading && items.length === 0) {
+  // Initial loading state (only on first load)
+  if (initialLoading) {
     return (
-      <View
-        className="flex-1 bg-black items-center justify-center"
-        style={{ paddingTop: insets.top }}
+      <ImageBackground
+        source={require('@/assets/images/bg-gradient.png')}
+        className="flex-1"
+        resizeMode="cover"
       >
-        <SpinningLoader size={32} color="#60a5fa" />
-      </View>
+        <View
+          className="flex-1 items-center justify-center"
+          style={{ paddingTop: insets.top }}
+        >
+          <Loader size={72} />
+        </View>
+      </ImageBackground>
     );
   }
 
   // Error state
   if (error && items.length === 0) {
     return (
-      <View
-        className="flex-1 bg-black items-center justify-center"
-        style={{ paddingTop: insets.top }}
+      <ImageBackground
+        source={require('@/assets/images/bg-gradient.png')}
+        className="flex-1"
+        resizeMode="cover"
       >
-        <Text className="text-sm text-red-400">Erreur : {error}</Text>
-      </View>
+        <View
+          className="flex-1 items-center justify-center"
+          style={{ paddingTop: insets.top }}
+        >
+          <Text className="text-sm text-error">Erreur : {error}</Text>
+        </View>
+      </ImageBackground>
     );
   }
 
   // Not logged in
   if (!user) {
     return (
-      <View
-        className="flex-1 bg-black items-center justify-center"
-        style={{ paddingTop: insets.top }}
+      <ImageBackground
+        source={require('@/assets/images/bg-gradient.png')}
+        className="flex-1"
+        resizeMode="cover"
       >
-        <Text className="text-zinc-400">Connectez-vous pour voir vos sauvegardes.</Text>
-      </View>
+        <View
+          className="flex-1 items-center justify-center"
+          style={{ paddingTop: insets.top }}
+        >
+          <Text className="text-text-secondary">Connectez-vous pour voir vos sauvegardes.</Text>
+        </View>
+      </ImageBackground>
     );
   }
 
+  const navbarTabs = [
+    { icon: 'signpost-line', label: 'Trip', badge: tripItems.length },
+    { icon: 'building-line', label: 'City', badge: cityItems.length },
+  ];
+
   return (
-    <View className="flex-1 bg-black">
-      {/* Header with filter tabs */}
-      <View style={{ paddingTop: insets.top }}>
-        <FilterTabs filter={filter} onFilterChange={handleFilterChange} />
+    <ImageBackground
+      source={require('@/assets/images/bg-gradient.png')}
+      className="flex-1"
+      resizeMode="cover"
+    >
+      {/* Header */}
+      <View style={{ paddingTop: insets.top + 16, paddingHorizontal: 16 }}>
+        {/* Title */}
+        <View className="flex-row mb-4">
+          <Text className="font-righteous text-hero text-text-primary">
+            Ta{' '}
+          </Text>
+          <Text
+            className="font-righteous text-hero text-accent"
+            style={{
+              textShadowColor: colors.shadowDark,
+              textShadowOffset: { width: 0, height: 4 },
+              textShadowRadius: 4,
+            }}
+          >
+            collection.
+          </Text>
+        </View>
+
+        {/* Navbar */}
+        <Navbar
+          tabs={navbarTabs}
+          activeIndex={activeTabIndex}
+          onTabChange={handleTabChange}
+          variant="secondary"
+          size="default"
+        />
       </View>
 
       {/* List */}
@@ -460,42 +447,49 @@ export default function SavedPage() {
         contentContainerStyle={{
           paddingHorizontal: 16,
           paddingTop: 16,
-          paddingBottom: insets.bottom + 16,
+          paddingBottom: insets.bottom + 120,
           gap: 16,
         }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor="#60a5fa"
+            tintColor={colors.textPrimary}
           />
         }
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.5}
-        renderItem={({ item, index }) => (
+        renderItem={({ item }) => (
           <EntityCard
             item={item}
-            animIndex={index}
             onPress={() => handlePress(item)}
             onDelete={() => handleDelete(item)}
           />
         )}
-        ListEmptyComponent={<EmptyState filter={filter} />}
+        ListEmptyComponent={
+          filterLoading ? (
+            <View className="items-center py-16">
+              <Loader size={72} />
+            </View>
+          ) : (
+            <EmptyState filter={filter} />
+          )
+        }
         ListFooterComponent={
           loadingMore ? (
             <View className="py-4 items-center">
-              <SpinningLoader size={24} color="#60a5fa" />
+              <Loader size={48} />
             </View>
           ) : null
         }
       />
-    </View>
+    </ImageBackground>
   );
 }
 
 // -- Empty State --------------------------------------------------------------
 
-function EmptyState({ filter }: { filter: SavedFilter }) {
+function EmptyState({ filter }: { filter: FilterType }) {
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(20)).current;
 
@@ -518,29 +512,21 @@ function EmptyState({ filter }: { filter: SavedFilter }) {
 
   const isCity = filter === 'city';
   const Icon = isCity ? Building2 : Map;
-  const title =
-    filter === 'all'
-      ? 'Aucune sauvegarde'
-      : filter === 'city'
-      ? 'Aucun guide de ville'
-      : 'Aucun voyage';
-  const subtitle =
-    filter === 'all'
-      ? "Validez des videos depuis l'Inbox pour creer vos premiers itineraires."
-      : filter === 'city'
-      ? "Analysez des videos de type 'city guide' pour decouvrir des villes."
-      : "Analysez des videos de voyage pour creer des itineraires.";
+  const title = isCity ? 'Aucun guide de ville' : 'Aucun voyage';
+  const subtitle = isCity
+    ? "Analysez des videos de type 'city guide' pour decouvrir des villes."
+    : "Analysez des videos de voyage pour creer des itineraires.";
 
   return (
     <Animated.View
       style={{ opacity, transform: [{ translateY }] }}
       className="items-center py-16"
     >
-      <View className="w-20 h-20 bg-zinc-800 rounded-full items-center justify-center mb-4">
-        <Icon size={40} color="#52525b" />
+      <View className="w-20 h-20 bg-bg-primary/50 rounded-full items-center justify-center mb-4">
+        <Icon size={40} color={colors.textMuted} />
       </View>
-      <Text className="text-xl font-medium text-white mb-2">{title}</Text>
-      <Text className="text-zinc-400 text-center" style={{ maxWidth: 280 }}>
+      <Text className="text-xl font-dmsans-medium text-text-primary mb-2">{title}</Text>
+      <Text className="text-text-secondary text-center" style={{ maxWidth: 280 }}>
         {subtitle}
       </Text>
     </Animated.View>

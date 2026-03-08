@@ -6,7 +6,6 @@ import {
   type ViewProps,
   type StyleProp,
   type ViewStyle,
-  TextInput,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
@@ -20,6 +19,7 @@ import Animated, {
 import Icon from 'react-native-remix-icon';
 import { cn } from '@/components/ui/utils';
 import { PrimaryButton } from '@/components/PrimaryButton';
+import { Input } from '@/components/Input';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -96,7 +96,7 @@ const PRIMARY_COLORS = {
 // Secondary variant colors
 const SECONDARY_COLORS = {
   activeText: '#FAFAFF',
-  inactiveText: '#6E6A9B',
+  inactiveText: 'rgba(250,250,255,0.7)',
   outerGradient: ['#8781CD', 'rgba(103, 96, 185, 0.88)', '#8781CD'] as const,
   innerGradient: ['#534D99', '#625BAD'] as const,
   indicatorBg: '#3C367C',
@@ -112,7 +112,7 @@ const SIZE_CONFIG = {
       expandedHeight: 122,
       indicatorWidth: 94,
       iconSize: 20,
-      fontSize: 10,
+      fontSize: 12,
       padding: 3,
       tabHeight: 54
     },
@@ -123,7 +123,7 @@ const SIZE_CONFIG = {
       tabHeight: 42,
       iconSize: 24,
       fontSize: 12,
-      padding: 4,
+      padding: 3.5,
       badgeSize: 15,
     },
     sm: {
@@ -177,7 +177,7 @@ function PrimaryNavbarItem({
         zIndex: 2,
       }}
     >
-      <Icon name={icon} size={iconSize} color={PRIMARY_COLORS.main} />
+      <Icon name={active ? icon.replace('-line', '-fill') : icon} size={iconSize} color={PRIMARY_COLORS.main} />
       <Text
         style={{
           fontFamily: 'Righteous',
@@ -239,7 +239,7 @@ function SecondaryNavbarItem({
         zIndex: 2,
       }}
     >
-      <Icon name={icon} size={iconSize} color={textColor} />
+      <Icon name={active ? icon.replace('-line', '-fill') : icon} size={iconSize} color={textColor} />
       <Text
         style={{
           fontFamily: 'Righteous',
@@ -533,38 +533,12 @@ export function Navbar({
           )}
 
           {/* Input field */}
-          <Animated.View
-            style={[
-              {
-                flexDirection: 'row',
-                alignItems: 'center',
-                height: 51,
-                marginTop: 10,
-                paddingHorizontal: 10,
-                borderRadius: 60,
-                backgroundColor: 'rgba(255, 255, 255, 0.03)',
-                shadowColor: '#EDF1FE',
-                shadowOffset: { width: -2, height: -2 },
-                shadowOpacity: 1,
-                shadowRadius: 5.3,
-              },
-              inputAnimatedStyle,
-            ]}
-          >
-            <Icon name="link" size={26} color="rgba(11, 41, 160, 0.5)" />
-            <TextInput
+          <Animated.View style={[{ marginTop: 10 }, inputAnimatedStyle]}>
+            <Input
               value={inputValue}
               onChangeText={onInputChange}
               placeholder={inputPlaceholder}
-              placeholderTextColor="rgba(11, 41, 160, 0.5)"
-              style={{
-                flex: 1,
-                marginLeft: 10,
-                fontFamily: 'Righteous',
-                fontSize: 14,
-                lineHeight: 17,
-                color: 'rgba(11, 41, 160, 0.8)',
-              }}
+              leftIcon="link"
             />
           </Animated.View>
         </View>

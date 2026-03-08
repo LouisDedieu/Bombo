@@ -14,9 +14,9 @@ import {
   View,
   Text,
   TouchableOpacity,
-  ActivityIndicator,
   ScrollView,
 } from 'react-native';
+import Loader from '@/components/Loader';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import {
@@ -128,8 +128,8 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <View className="flex-1 bg-black items-center justify-center">
-        <ActivityIndicator size="large" color="#60a5fa" />
+      <View className="flex-1 items-center justify-center">
+        <Loader size={48} />
       </View>
     );
   }
@@ -139,7 +139,7 @@ export default function ProfilePage() {
 
   return (
     <ScrollView
-      className="flex-1 bg-black"
+      className="flex-1"
       contentContainerStyle={{ paddingTop: insets.top }}
     >
       {/* ══════════════════════════════════════════
@@ -309,7 +309,7 @@ export default function ProfilePage() {
           >
             {signing ? (
               <>
-                <ActivityIndicator size="small" color="#a1a1aa" />
+                <Loader size={20} color="#a1a1aa" />
                 <Text className="text-zinc-400 font-medium">Déconnexion…</Text>
               </>
             ) : (

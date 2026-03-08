@@ -417,7 +417,7 @@ export default function CityReviewPage() {
 
   if (loading) {
     return (
-      <View className="flex-1 bg-black items-center justify-center">
+      <View className="flex-1 items-center justify-center">
         <SpinningLoader size={32} color="#60a5fa" />
       </View>
     );
@@ -425,7 +425,7 @@ export default function CityReviewPage() {
 
   if (!city) {
     return (
-      <View className="flex-1 bg-black items-center justify-center gap-4">
+      <View className="flex-1 items-center justify-center gap-4">
         <Text className="text-zinc-400">Ville introuvable</Text>
         <Button onPress={() => router.navigate('/(tabs)')}>Retour</Button>
       </View>
@@ -444,8 +444,8 @@ export default function CityReviewPage() {
     : '#a855f7'; // purple-500 for cities
 
   return (
-    <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#000' }}>
-      <View className="flex-1 bg-black">
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <View className="flex-1">
         {/* ── Header ── */}
         <View
           className="bg-zinc-900 px-4 py-4"

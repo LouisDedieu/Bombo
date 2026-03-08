@@ -15,11 +15,11 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { WifiOff, RefreshCw, MailCheck } from 'lucide-react-native';
 import { useAuth } from '../context/AuthContext';
+import Loader from '@/components/Loader';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 export type RootStackParamList = {
@@ -35,7 +35,7 @@ export type RootStackParamList = {
 export function LoadingScreen() {
   return (
     <View style={styles.container}>
-      <ActivityIndicator size="large" color="#60a5fa" />
+      <Loader size={48} />
       <Text style={styles.loadingText}>Connexion en cours…</Text>
     </View>
   );

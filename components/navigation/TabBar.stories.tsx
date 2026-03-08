@@ -47,9 +47,9 @@ type Story = StoryObj<typeof TabBar>;
 // ---------------------------------------------------------------------------
 
 const primaryTabs = [
-  { icon: 'inbox-line', label: 'Inbox' },
+  { icon: 'inbox-2-line', label: 'Inbox' },
   { icon: 'bookmark-line', label: 'Saved' },
-  { icon: 'user-line', label: 'Profile' },
+  { icon: 'user-3-line', label: 'Profile' },
 ];
 
 const defaultActions = [

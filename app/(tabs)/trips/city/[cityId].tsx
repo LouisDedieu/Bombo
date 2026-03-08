@@ -391,7 +391,7 @@ export default function CityDetailPage() {
   if (loading) {
     return (
       <View
-        className="flex-1 bg-black items-center justify-center"
+        className="flex-1 items-center justify-center"
         style={{ paddingTop: insets.top }}
       >
         <SpinningLoader size={32} color="#a855f7" />
@@ -403,7 +403,7 @@ export default function CityDetailPage() {
   if (error || !city) {
     return (
       <View
-        className="flex-1 bg-black items-center justify-center"
+        className="flex-1 items-center justify-center"
         style={{ paddingTop: insets.top }}
       >
         <Text className="text-red-400">{error || 'City not found'}</Text>
@@ -418,7 +418,7 @@ export default function CityDetailPage() {
   }
 
   return (
-    <View className="flex-1 bg-black">
+    <View className="flex-1">
       {/* Header */}
       <View
         className="px-4 pb-4 border-b border-zinc-800"

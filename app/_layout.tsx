@@ -3,7 +3,7 @@ import '../styles/global.css';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { View, Platform } from 'react-native';
+import { ImageBackground, Platform } from 'react-native';
 import { Toaster } from 'sonner-native';
 import { AuthProvider } from '@/context/AuthContext';
 import { useAuthGuardState, LoadingScreen, NetworkErrorScreen, EmailPendingScreen } from '@/components/AuthGuard';
@@ -52,7 +52,7 @@ function AuthGate({ onRetry }: { onRetry: () => void }) {
   if (group === 'email_pending') return <EmailPendingScreen />;
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
+    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}>
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="review/[tripId]" />
       <Stack.Screen name="login" />
@@ -109,14 +109,18 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <View style={{ flex: 1, backgroundColor: '#000000' }}>
+      <ImageBackground
+        source={require('../assets/images/bg-gradient.png')}
+        style={{ flex: 1 }}
+        resizeMode="cover"
+      >
         <StatusBar style="light" />
         <AuthProvider key={retryKey}>
           <AuthGate onRetry={handleRetry} />
           <Toaster position="top-center" />
           {process.env.EXPO_PUBLIC_DEV_MODE === 'true' && <DebugPanel />}
         </AuthProvider>
-      </View>
+      </ImageBackground>
     </SafeAreaProvider>
   );
 }

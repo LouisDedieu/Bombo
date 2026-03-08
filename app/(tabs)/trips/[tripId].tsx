@@ -8,13 +8,13 @@ import {
   View,
   Text,
   TouchableOpacity,
-  ActivityIndicator,
   Linking,
   Image,
   ActionSheetIOS,
   Platform,
   Alert,
 } from 'react-native';
+import Loader from '@/components/Loader';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import DraggableFlatList, {
   NestableScrollContainer,
@@ -335,15 +335,15 @@ export default function TripDetailPage() {
 
   if (loading) {
     return (
-      <View className="flex-1 bg-black items-center justify-center" style={{ paddingTop: insets.top }}>
-        <ActivityIndicator size="large" color="#60a5fa" />
+      <View className="flex-1 items-center justify-center" style={{ paddingTop: insets.top }}>
+        <Loader size={48} />
       </View>
     );
   }
 
   if (!trip || !derived) {
     return (
-      <View className="flex-1 bg-black items-center justify-center px-4" style={{ paddingTop: insets.top }}>
+      <View className="flex-1 items-center justify-center px-4" style={{ paddingTop: insets.top }}>
         <Text className="text-zinc-400 text-sm mb-4">Voyage introuvable.</Text>
         <TouchableOpacity
           onPress={() => router.replace('/(tabs)/trips')}
@@ -366,7 +366,7 @@ export default function TripDetailPage() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-    <View className="flex-1 bg-black">
+    <View className="flex-1">
       {/* ════════════════════════════════════════════
           HEADER STICKY
       ════════════════════════════════════════════ */}
@@ -568,7 +568,7 @@ export default function TripDetailPage() {
                         style={{ backgroundColor: '#2563eb', opacity: isSavingOrder ? 0.6 : 1 }}
                       >
                         {isSavingOrder ? (
-                          <ActivityIndicator size="small" color="#fff" />
+                          <Loader size={14} color="#fff" />
                         ) : (
                           <Check size={14} color="#fff" />
                         )}

@@ -5,15 +5,72 @@ module.exports = {
     presets: [require("nativewind/preset")],
     theme: {
         extend: {
+            // ── Colors ─────────────────────────────────────────────────────────
+            colors: {
+                // Background
+                'bg-primary': '#1a1744',
+
+                // Accent / Brand
+                'accent': '#5248D4',
+                'violet': '#5248D4',
+
+                // Text colors
+                'text-primary': '#FAFAFF',
+                'text-secondary': 'rgba(255, 255, 255, 0.65)',
+                'text-muted': 'rgba(255, 255, 255, 0.60)',
+                'text-subtle': 'rgba(255, 255, 255, 0.30)',
+
+                // Social / Links
+                'social': '#8C92B5',
+
+                // Borders / Dividers
+                'divider': 'rgba(255, 255, 255, 0.20)',
+
+                // Error
+                'error': '#F87171',
+                'error-bg': 'rgba(248, 113, 113, 0.15)',
+            },
+
+            // ── Font Families ──────────────────────────────────────────────────
             fontFamily: {
                 // Main font - Righteous (for headings, buttons, emphasis)
                 sans: ['DMSans'],
                 righteous: ['Righteous'],
                 // Secondary font - DM Sans (for body text)
-                'dm-sans': ['DMSans'],
-                'dm-sans-medium': ['DMSans-Medium'],
-                'dm-sans-semibold': ['DMSans-SemiBold'],
-                'dm-sans-bold': ['DMSans-Bold'],
+                dmsans: ['DMSans'],
+                'dmsans-medium': ['DMSans-Medium'],
+                'dmsans-semibold': ['DMSans-SemiBold'],
+                'dmsans-bold': ['DMSans-Bold'],
+            },
+
+            // ── Font Sizes ─────────────────────────────────────────────────────
+            fontSize: {
+                // Hero title (40px)
+                'hero': ['40px', { lineHeight: '48px' }],
+                // Section title (28px)
+                'title': ['28px', { lineHeight: '34px' }],
+                // Subtitle / body (16px)
+                'body': ['16px', { lineHeight: '22px' }],
+                // Small text (14px)
+                'small': ['14px', { lineHeight: '20px' }],
+                // Extra small (12px)
+                'tiny': ['12px', { lineHeight: '16px' }],
+                // Micro text (10px)
+                'micro': ['10px', { lineHeight: '14px' }],
+            },
+
+            // ── Spacing ────────────────────────────────────────────────────────
+            spacing: {
+                '4.5': '18px',
+                '15': '60px',
+                '30': '120px',
+            },
+
+            // ── Border Radius ──────────────────────────────────────────────────
+            borderRadius: {
+                'card': '12px',
+                'button': '14px',
+                'input': '14px',
             },
         },
     },

@@ -19,11 +19,11 @@ import {
   TouchableOpacity,
   ScrollView,
   Animated,
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
 } from 'react-native';
+import Loader from '@/components/Loader';
 import { useRouter } from 'expo-router';
 import {
   X,
@@ -324,7 +324,7 @@ export default function AddTripModal({ isOpen, onClose, onAnalysisStarted }: Add
                   {isAnalyzing && (
                     <View className="gap-3">
                       <View className="flex-row items-center gap-3">
-                        <ActivityIndicator size="small" color="#60a5fa" />
+                        <Loader size={24} />
                         <View className="flex-1">
                           <Text className="text-sm text-white font-medium">
                             {STATUS_LABELS[status] ?? 'Traitement en cours...'}
@@ -382,7 +382,7 @@ export default function AddTripModal({ isOpen, onClose, onAnalysisStarted }: Add
                       >
                         {isAnalyzing ? (
                           <View className="flex-row items-center gap-2">
-                            <ActivityIndicator size="small" color="#ffffff" />
+                            <Loader size={20} color="#ffffff" />
                             <Text className="text-white text-sm font-semibold">Analyse...</Text>
                           </View>
                         ) : (

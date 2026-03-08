@@ -3,7 +3,6 @@ import {
   Pressable,
   Text,
   View,
-  ActivityIndicator,
   type PressableProps,
   type StyleProp,
   type ViewStyle,
@@ -11,6 +10,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { cn } from '@/components/ui/utils';
 import Icon from 'react-native-remix-icon';
+import Loader from '@/components/Loader';
 
 // ---------------------------------------------------------------------------
 // Color Presets - Each has stroke gradient + fill gradient
@@ -23,7 +23,7 @@ const colorPresets = {
     fill: ['#776bc8', '#2D22A5'] as const,
     fillAngle: 124.86,
     shadow: 'rgba(59, 46, 189, 0.64)',
-    dropShadow: 'rgba(17, 13, 63, 0.36)',
+    dropShadow: 'rgba(0,0,0,0.2)',
   },
   // Purple variant
   purple: {
@@ -31,7 +31,7 @@ const colorPresets = {
     fill: ['#8b58dc', '#4C1D95'] as const,
     fillAngle: 124.86,
     shadow: 'rgba(109, 40, 217, 0.64)',
-    dropShadow: 'rgba(76, 29, 149, 0.36)',
+    dropShadow: 'rgba(76, 29, 149, 0.2)',
   },
   // Blue variant
   blue: {
@@ -39,15 +39,15 @@ const colorPresets = {
     fill: ['#5184f6', '#1D4ED8'] as const,
     fillAngle: 124.86,
     shadow: 'rgba(37, 99, 235, 0.64)',
-    dropShadow: 'rgba(30, 58, 138, 0.36)',
+    dropShadow: 'rgba(30, 58, 138, 0.2)',
   },
   // Green/yellowish variant
   green: {
-    stroke: ['#7c8c5e', '#3D4A2D', '#6B7B4F'] as const,
+    stroke: ['#6B7B4F', '#3D4A2D', '#6B7B4F'] as const,
     fill: ['#768851', '#4A5A2F'] as const,
     fillAngle: 124.86,
     shadow: 'rgba(92, 107, 61, 0.64)',
-    dropShadow: 'rgba(61, 74, 45, 0.36)',
+    dropShadow: 'rgba(61, 74, 45, 0.2)',
   },
 } as const;
 
@@ -202,7 +202,7 @@ export function PrimaryButton({
             }}
           >
             {loading ? (
-              <ActivityIndicator size="small" color="#FAFAFF" />
+              <Loader size={24} color="#FAFAFF" />
             ) : (
               <>
                 {leftIcon && (

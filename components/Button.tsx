@@ -2,12 +2,12 @@ import React from 'react';
 import {
   TouchableOpacity,
   Text,
-  ActivityIndicator,
   type TouchableOpacityProps,
   type TextStyle,
 } from 'react-native';
 import { cva, type VariantProps } from 'class-variance-authority';
 import {cn} from "@/components/ui/utils";
+import Loader from '@/components/Loader';
 
 // ---------------------------------------------------------------------------
 // Variants — mirrors the web buttonVariants 1-to-1
@@ -89,7 +89,7 @@ export interface ButtonProps
   /** Text label (alternative to children) */
   title?: string;
   children?: React.ReactNode;
-  /** Show an ActivityIndicator instead of content */
+  /** Show a Loader instead of content */
   loading?: boolean;
   /** Extra class names forwarded to the container */
   className?: string;
@@ -134,7 +134,7 @@ export function Button({
       {...props}
     >
       {loading ? (
-        <ActivityIndicator size="small" color={getSpinnerColor(variant)} />
+        <Loader size={20} color={getSpinnerColor(variant)} />
       ) : (
         <Text
           className={cn(buttonTextVariants({ variant, size }), textClassName)}

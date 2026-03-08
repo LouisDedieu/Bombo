@@ -72,7 +72,7 @@ function SuccessScreen() {
   }, []);
 
   return (
-    <View className="flex-1 bg-black items-center justify-center p-4">
+    <View className="flex-1 items-center justify-center p-4">
       <Animated.View style={{ opacity, transform: [{ scale }] }} className="items-center gap-4">
         {/* web: w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 */}
         <View
@@ -148,7 +148,7 @@ export default function ResetPassword() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      className="flex-1 bg-black"
+      className="flex-1"
     >
       <ScrollView
         contentContainerStyle={{ flexGrow: 1 }}

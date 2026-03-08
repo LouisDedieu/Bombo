@@ -5,6 +5,17 @@ const { withStorybook } = require("@storybook/react-native/metro/withStorybook")
 
 const config = getDefaultConfig(__dirname);
 
+// Add SVG transformer support
+config.transformer = {
+  ...config.transformer,
+  babelTransformerPath: require.resolve("react-native-svg-transformer/expo"),
+};
+config.resolver = {
+  ...config.resolver,
+  assetExts: config.resolver.assetExts.filter((ext) => ext !== "svg"),
+  sourceExts: [...config.resolver.sourceExts, "svg"],
+};
+
 const nativeWindConfig = withNativeWind(config, {
   input: "./styles/global.css",
 });
