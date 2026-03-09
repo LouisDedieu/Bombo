@@ -12,7 +12,6 @@ import {
   TouchableOpacity,
   FlatList,
   RefreshControl,
-  Image,
   ImageBackground,
   Animated,
   Easing,
@@ -21,6 +20,7 @@ import {
 } from 'react-native';
 import { Navbar } from '@/components/navigation/Navbar';
 import Loader from '@/components/Loader';
+import { ContentCard } from '@/components/ContentCard';
 import { colors } from '@/constants/colors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
@@ -29,192 +29,15 @@ import Constants from 'expo-constants';
 const isExpoGo = Constants.appOwnership === 'expo';
 const useNativeTabs = Platform.OS === 'ios' && parseInt(String(Platform.Version), 10) >= 26 && !isExpoGo;
 import { useRouter } from 'expo-router';
-import {
-  Map,
-  MapPin,
-  Calendar,
-  Bookmark,
-  Trash2,
-  Building2,
-  Star,
-} from 'lucide-react-native';
+import { Map, Building2 } from 'lucide-react-native';
 import { useAuth } from '@/context/AuthContext';
 import { deleteTrip } from '@/services/tripService';
 import { deleteCity } from '@/services/cityService';
-import {
-  getUserSavedItems,
-  SavedItem,
-  getEntityAccentColor,
-} from '@/services/savedService';
-
-// -- Helpers ------------------------------------------------------------------
-
-function timeAgo(dateString: string): string {
-  const diffDays = Math.floor(
-    (Date.now() - new Date(dateString).getTime()) / 86_400_000
-  );
-  if (diffDays === 0) return "Aujourd'hui";
-  if (diffDays === 1) return 'Hier';
-  if (diffDays < 7) return `Il y a ${diffDays} jours`;
-  if (diffDays < 30) return `Il y a ${Math.floor(diffDays / 7)} semaines`;
-  return `Il y a ${Math.floor(diffDays / 30)} mois`;
-}
-
+import { getUserSavedItems, SavedItem } from '@/services/savedService';
 
 // -- Filter type (without 'all') ----------------------------------------------
 
 type FilterType = 'trip' | 'city';
-
-// -- EntityCard ---------------------------------------------------------------
-
-function EntityCard({
-  item,
-  onPress,
-  onDelete,
-}: {
-  item: SavedItem;
-  onPress: () => void;
-  onDelete: () => void;
-}) {
-  const isCity = item.entity_type === 'city';
-  const accentColor = getEntityAccentColor(item.entity_type);
-
-  const handleDelete = () => {
-    Alert.alert(
-      'Supprimer definitivement ?',
-      `Ce ${isCity ? 'guide' : 'voyage'} sera supprime de facon permanente.`,
-      [
-        { text: 'Annuler', style: 'cancel' },
-        { text: 'Supprimer', style: 'destructive', onPress: onDelete },
-      ]
-    );
-  };
-
-  return (
-    <View>
-      <TouchableOpacity
-        onPress={onPress}
-        activeOpacity={0.8}
-        className="bg-zinc-900 rounded-xl overflow-hidden"
-        style={{
-          borderWidth: 1,
-          borderColor: '#27272a',
-          borderLeftWidth: 4,
-          borderLeftColor: accentColor,
-        }}
-      >
-        {/* Thumbnail */}
-        {item.thumbnail_url ? (
-          <View className="relative h-48 bg-zinc-800 overflow-hidden">
-            <Image
-              source={{ uri: item.thumbnail_url }}
-              className="w-full h-full"
-              resizeMode="cover"
-            />
-            <View
-              className="absolute inset-0"
-              style={{ backgroundColor: 'rgba(0,0,0,0.70)' }}
-            />
-            <View className="absolute bottom-4 left-4 right-4">
-              {/* Entity type badge */}
-              <View
-                className="self-start px-2 py-0.5 rounded-full mb-2"
-                style={{ backgroundColor: `${accentColor}33` }}
-              >
-                <Text style={{ color: accentColor, fontSize: 10, fontWeight: '600' }}>
-                  {isCity ? 'City Guide' : 'Trip'}
-                </Text>
-              </View>
-              <Text
-                className="text-xl font-bold text-white leading-tight"
-                numberOfLines={2}
-              >
-                {item.title}
-              </Text>
-              {item.subtitle && (
-                <Text className="text-xs text-zinc-300 mt-1">{item.subtitle}</Text>
-              )}
-            </View>
-          </View>
-        ) : (
-          <View className="p-4 pb-0">
-            {/* Entity type badge */}
-            <View
-              className="self-start px-2 py-0.5 rounded-full mb-2"
-              style={{ backgroundColor: `${accentColor}33` }}
-            >
-              <Text style={{ color: accentColor, fontSize: 10, fontWeight: '600' }}>
-                {isCity ? 'City Guide' : 'Trip'}
-              </Text>
-            </View>
-            <Text className="text-xl font-bold text-white">{item.title}</Text>
-            {item.subtitle && (
-              <Text className="text-xs text-zinc-400 mt-1">{item.subtitle}</Text>
-            )}
-          </View>
-        )}
-
-        {/* Info section */}
-        <View className="p-4 gap-3">
-          <View className="flex-row items-center gap-4 flex-wrap">
-            {/* Duration or highlights count */}
-            {isCity && item.highlights_count ? (
-              <View className="flex-row items-center gap-1.5">
-                <Star size={16} color={accentColor} />
-                <Text className="text-sm text-zinc-400">
-                  {item.highlights_count} highlights
-                </Text>
-              </View>
-            ) : item.duration_days ? (
-              <View className="flex-row items-center gap-1.5">
-                <MapPin size={16} color={accentColor} />
-                <Text className="text-sm text-zinc-400">{item.duration_days} jours</Text>
-              </View>
-            ) : null}
-
-            {/* Date */}
-            <View className="flex-row items-center gap-1.5">
-              <Calendar size={16} color="#71717a" />
-              <Text className="text-sm text-zinc-400">{timeAgo(item.created_at)}</Text>
-            </View>
-
-            {/* Creator */}
-            {item.content_creator_handle && (
-              <Text className="text-sm text-zinc-500">
-                @{item.content_creator_handle}
-              </Text>
-            )}
-          </View>
-
-          {/* User notes */}
-          {item.notes && (
-            <Text
-              className="text-xs text-zinc-500 italic pt-2"
-              style={{ borderTopWidth: 1, borderTopColor: '#27272a' }}
-            >
-              {item.notes}
-            </Text>
-          )}
-
-          {/* Footer */}
-          <View className="flex-row items-center justify-between pt-1">
-            <View className="flex-row items-center gap-1.5">
-              <Bookmark size={14} color="#4ade80" fill="#4ade80" />
-              <Text className="text-xs text-green-400">Sauvegarde</Text>
-            </View>
-            <TouchableOpacity
-              onPress={handleDelete}
-              className="p-2 -mr-2"
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Trash2 size={18} color="#71717a" />
-            </TouchableOpacity>
-          </View>
-        </View>
-      </TouchableOpacity>
-    </View>
-  );
-}
 
 // -- Main Component -----------------------------------------------------------
 
@@ -415,11 +238,11 @@ export default function SavedPage() {
       <View style={{ paddingTop: insets.top + 16, paddingHorizontal: 16 }}>
         {/* Title */}
         <View className="flex-row mb-4">
-          <Text className="font-righteous text-hero text-text-primary">
+          <Text className="font-righteous text-title text-text-primary">
             Ta{' '}
           </Text>
           <Text
-            className="font-righteous text-hero text-accent"
+            className="font-righteous text-title text-accent"
             style={{
               textShadowColor: colors.shadowDark,
               textShadowOffset: { width: 0, height: 4 },
@@ -459,13 +282,46 @@ export default function SavedPage() {
         }
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.5}
-        renderItem={({ item }) => (
-          <EntityCard
-            item={item}
-            onPress={() => handlePress(item)}
-            onDelete={() => handleDelete(item)}
-          />
-        )}
+        renderItem={({ item }) => {
+          // Parse city subtitle "Nice, France" → country = "France"
+          const countryFromSubtitle = item.subtitle?.split(', ').slice(1).join(', ') || undefined;
+
+          // Transform days data for ContentCard
+          const daysForCard = item.days?.map((d) => ({
+            dayNumber: d.day_number,
+            count: d.spots_count,
+          }));
+
+          // Transform categories data for ContentCard
+          const categoriesForCard = item.categories?.map((c) => ({
+            category: c.category,
+            count: c.count,
+          }));
+
+          return (
+            <TouchableOpacity
+              onPress={() => handlePress(item)}
+              activeOpacity={0.8}
+            >
+              {item.entity_type === 'trip' ? (
+                <ContentCard
+                  variant="trip"
+                  title={item.title}
+                  daysCount={item.duration_days ?? undefined}
+                  days={daysForCard}
+                />
+              ) : (
+                <ContentCard
+                  variant="city"
+                  title={item.title}
+                  highlightsCount={item.highlights_count ?? undefined}
+                  country={countryFromSubtitle}
+                  categories={categoriesForCard}
+                />
+              )}
+            </TouchableOpacity>
+          );
+        }}
         ListEmptyComponent={
           filterLoading ? (
             <View className="items-center py-16">
