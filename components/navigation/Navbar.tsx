@@ -112,7 +112,7 @@ const SIZE_CONFIG = {
       expandedHeight: 122,
       indicatorWidth: 94,
       iconSize: 20,
-      fontSize: 12,
+      fontSize: 13,
       padding: 3,
       tabHeight: 54
     },
@@ -122,7 +122,7 @@ const SIZE_CONFIG = {
       navbarHeight: 50,
       tabHeight: 42,
       iconSize: 24,
-      fontSize: 12,
+      fontSize: 14,
       padding: 3.5,
       badgeSize: 15,
     },

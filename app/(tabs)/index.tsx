@@ -28,6 +28,7 @@ import { PrimaryButton } from '@/components/PrimaryButton';
 import { Input } from '@/components/Input';
 import { SharePromotionCard } from '@/components/SharePromotionCard';
 import { JobCard } from '@/components/JobCard';
+import Loader from '@/components/Loader';
 import { useAuth } from '@/context/AuthContext';
 
 import {
@@ -157,23 +158,6 @@ function EmptyState({ onAnalysisStarted, isSubmitting }: EmptyStateProps) {
 
 function LoadingState() {
   const insets = useSafeAreaInsets();
-  const rotation = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.loop(
-      Animated.timing(rotation, {
-        toValue: 1,
-        duration: 1000,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      })
-    ).start();
-  }, []);
-
-  const spin = rotation.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
 
   return (
     <ImageBackground
@@ -185,12 +169,7 @@ function LoadingState() {
         className="flex-1 justify-center items-center"
         style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}
       >
-        <Animated.View style={{ transform: [{ rotate: spin }] }}>
-          <Icon name="loader-4-line" size={32} color={colors.textPrimary} />
-        </Animated.View>
-        <Text className="font-dmsans-medium text-small text-text-muted mt-4">
-          Chargement...
-        </Text>
+        <Loader />
       </View>
     </ImageBackground>
   );
