@@ -11,11 +11,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TabBar } from '@/components/navigation/TabBar';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import type { NavbarTab, NavbarAction } from '@/components/navigation/Navbar';
+import { useAnalysis } from '@/context/AnalysisContext';
 
 const TABS: NavbarTab[] = [
   { icon: 'inbox-line', label: 'Inbox' },
   { icon: 'bookmark-line', label: 'Saved' },
-  { icon: 'user-line', label: 'Profile' },
+  { icon: 'user3-line', label: 'Profile' },
 ];
 
 const ACTIONS: NavbarAction[] = [
@@ -29,6 +30,7 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
   const [expanded, setExpanded] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const keyboardHeight = useSharedValue(0);
+  const { triggerAnalysis } = useAnalysis();
 
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -63,6 +65,13 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
     navigation.navigate(route.name);
   };
 
+  const handleSubmit = (url: string, _action: NavbarAction) => {
+    // Clear the input after submission
+    setInputValue('');
+    // Delegate to whatever page has registered its handler
+    triggerAnalysis(url);
+  };
+
   return (
     <Animated.View
       style={[
@@ -87,6 +96,7 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
         inputPlaceholder="Coller votre lien ici..."
         inputValue={inputValue}
         onInputChange={setInputValue}
+        onSubmit={handleSubmit}
       />
     </Animated.View>
   );

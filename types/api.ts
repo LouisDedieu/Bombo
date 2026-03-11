@@ -24,12 +24,12 @@ export const HIGHLIGHT_CATEGORIES: Record<HighlightCategory, {
   color: string;
   label: string;
 }> = {
-  food: { icon: 'Utensils', color: 'orange', label: 'Food & Drinks' },
-  culture: { icon: 'Landmark', color: 'blue', label: 'Culture' },
-  nature: { icon: 'Trees', color: 'green', label: 'Nature' },
-  shopping: { icon: 'ShoppingBag', color: 'pink', label: 'Shopping' },
-  nightlife: { icon: 'Moon', color: 'purple', label: 'Nightlife' },
-  other: { icon: 'MapPin', color: 'zinc', label: 'Other' },
+  food: { label: 'restaurant', icon: 'restaurant-line', color: '#c16833' },
+  culture: { label: 'culture', icon: 'bank-line', color: '#2055A5' },
+  nightlife: { label: 'nightlife', icon: 'moon-line', color: '#533495' },
+  shopping: { label: 'shopping', icon: 'shopping-bag-line', color: '#9551d6' },
+  nature: { label: 'nature', icon: 'tree-line', color: '#10762B' },
+  other: { label: 'other', icon: 'map-pin-line', color: '#8f8cb5' },
 };
 
 // ── Vibe Tags ───────────────────────────────────────────────────────────────

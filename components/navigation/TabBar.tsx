@@ -34,18 +34,23 @@ export interface TabBarProps {
   inputValue?: string;
   /** Called when input value changes */
   onInputChange?: (value: string) => void;
+  /**
+   * Called when the user presses an action button with a valid URL.
+   * Receives the URL and the action that was triggered.
+   * The TabBar will also collapse automatically after this fires.
+   */
+  onSubmit?: (url: string, action: NavbarAction) => void;
   /** Container style */
   style?: StyleProp<ViewStyle>;
 }
 
 // ---------------------------------------------------------------------------
-// CrossIcon — two rectangles forming a + / × shape
-// Drawn manually so we fully own the transform (no icon lib dependency here)
+// CrossIcon
 // ---------------------------------------------------------------------------
 
 function CrossIcon({ size, color }: { size: number; color: string }) {
-  const thickness = Math.round(size * 0.083); // ≈ 2px at 24
-  const length = Math.round(size * 0.75);     // ≈ 18px at 24
+  const thickness = Math.round(size * 0.083);
+  const length = Math.round(size * 0.75);
 
   return (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
@@ -85,9 +90,9 @@ export function TabBar({
                          inputPlaceholder,
                          inputValue,
                          onInputChange,
+                         onSubmit,
                          style,
                        }: TabBarProps) {
-  // 0 = collapsed → 1 = expanded
   const expandProgress = useSharedValue(expanded ? 1 : 0);
 
   const timingConfig = {
@@ -95,7 +100,6 @@ export function TabBar({
     easing: Easing.bezier(0.4, 0, 0.2, 1),
   };
 
-  // Sync animation when prop is controlled externally
   React.useEffect(() => {
     expandProgress.value = withTiming(expanded ? 1 : 0, timingConfig);
   }, [expanded]);
@@ -104,7 +108,15 @@ export function TabBar({
     onExpandedChange?.(!expanded);
   }, [expanded, onExpandedChange]);
 
-  // Cross rotates 0° (add) → 45° (close) as panel opens
+  const handleSubmit = useCallback(
+    (url: string, action: NavbarAction) => {
+      onSubmit?.(url, action);
+      // Auto-collapse after submitting
+      onExpandedChange?.(false);
+    },
+    [onSubmit, onExpandedChange]
+  );
+
   const rotateStyle = useAnimatedStyle(() => ({
     transform: [
       { rotate: `${interpolate(expandProgress.value, [0, 1], [0, 45])}deg` },
@@ -122,7 +134,6 @@ export function TabBar({
         style,
       ]}
     >
-      {/* Navbar fills the available width */}
       <Navbar
         tabs={tabs}
         activeIndex={activeIndex}
@@ -132,31 +143,18 @@ export function TabBar({
         inputPlaceholder={inputPlaceholder}
         inputValue={inputValue}
         onInputChange={onInputChange}
+        onSubmit={handleSubmit}
         style={{ flex: 1 }}
       />
 
-      {/* Toggle button — fixed 61×61 to match Figma */}
+      {/* Toggle button */}
       <View style={{ width: 61, height: 61 }}>
-        {/*
-          PrimaryButton renders the gradient shell + press animation.
-          We pass NO icon props intentionally: when size="icon" with no
-          title/children, PrimaryButton renders an empty pressable shell,
-          which is exactly what we want — our CrossIcon overlay handles
-          the visual.
-        */}
-        {/*
-          We use size="pill" (borderRadius: 51) with forced 61×61 dimensions.
-          size="icon" computes borderRadius=26 which isn't enough for a perfect
-          circle at 61px. pill's radius of 51 exceeds half of 61 so it always
-          renders as a perfect circle regardless of exact px value.
-        */}
         <PrimaryButton
           size="pill"
           onPress={handleToggle}
           style={{ width: 61, height: 61 }}
         />
 
-        {/* Animated cross overlay (non-interactive) */}
         <Animated.View
           pointerEvents="none"
           style={[

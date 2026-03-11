@@ -20,6 +20,7 @@ import {
   DMSans_700Bold,
 } from '@expo-google-fonts/dm-sans';
 import * as SplashScreen from 'expo-splash-screen';
+import {AnalysisProvider} from "@/context/AnalysisContext";
 
 // Keep splash screen visible while loading fonts
 SplashScreen.preventAutoHideAsync();
@@ -116,9 +117,11 @@ export default function RootLayout() {
       >
         <StatusBar style="light" />
         <AuthProvider key={retryKey}>
-          <AuthGate onRetry={handleRetry} />
-          <Toaster position="top-center" />
-          {process.env.EXPO_PUBLIC_DEV_MODE === 'true' && <DebugPanel />}
+          <AnalysisProvider>
+            <AuthGate onRetry={handleRetry} />
+            <Toaster position="top-center" />
+            {process.env.EXPO_PUBLIC_DEV_MODE === 'true' && <DebugPanel />}
+          </AnalysisProvider>
         </AuthProvider>
       </ImageBackground>
     </SafeAreaProvider>

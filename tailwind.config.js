@@ -29,6 +29,10 @@ module.exports = {
                 // Error
                 'error': '#F87171',
                 'error-bg': 'rgba(248, 113, 113, 0.15)',
+                
+                // Trip and City colors
+                'trip': '#656E57',
+                'city': '#336CA0',
             },
 
             // ── Font Families ──────────────────────────────────────────────────

@@ -41,6 +41,14 @@ const colorPresets = {
     shadow: 'rgba(37, 99, 235, 0.64)',
     dropShadow: 'rgba(30, 58, 138, 0.2)',
   },
+  // Accent blue variant (lighter blue)
+  accent: {
+    stroke: ['#5d8ce4', '#0F398D', '#5d8ce4'] as const,
+    fill: ['#113886', '#345494'] as const,
+    fillAngle: 124.86,
+    shadow: 'rgba(59, 46, 189, 0.64)',
+    dropShadow: 'rgba(17, 13, 63, 0.36)',
+  },
   // Green/yellowish variant
   green: {
     stroke: ['#6B7B4F', '#3D4A2D', '#6B7B4F'] as const,
@@ -70,8 +78,8 @@ export interface PrimaryButtonProps extends Omit<PressableProps, 'style' | 'chil
   showArrow?: boolean;
   /** Color preset */
   color?: ColorPreset;
-  /** Button size: default, sm, lg, icon (round), pill (max rounded with text+icon) */
-  size?: 'default' | 'sm' | 'lg' | 'icon' | 'pill';
+  /** Button size: default, sm, lg, icon (round), iconSm (small round), pill (max rounded with text+icon) */
+  size?: 'default' | 'sm' | 'lg' | 'icon' | 'iconSm' | 'pill';
   /** Full width button */
   fullWidth?: boolean;
   /** Loading state */
@@ -103,7 +111,7 @@ export function PrimaryButton({
 }: PrimaryButtonProps) {
   const isDisabled = disabled || loading;
   const preset = colorPresets[color];
-  const isIconOnly = size === 'icon' && !title && !children;
+  const isIconOnly = (size === 'icon' || size === 'iconSm') && !title && !children;
 
   // Size configurations
   const sizeConfig = {
@@ -111,6 +119,7 @@ export function PrimaryButton({
     sm: { height: 40, padding: { top: 6, bottom: 6, left: 8, right: 10 }, iconSize: 20, fontSize: 14, borderRadius: 12, strokeWidth: 3 },
     lg: { height: 60, padding: { top: 12, bottom: 12, left: 14, right: 16 }, iconSize: 28, fontSize: 18, borderRadius: 20, strokeWidth: 3 },
     icon: { height: 51, padding: { top: 0, bottom: 0, left: 0, right: 0 }, iconSize: 24, fontSize: 16, borderRadius: 26, strokeWidth: 3 },
+    iconSm: { height: 27, padding: { top: 0, bottom: 0, left: 0, right: 0 }, iconSize: 19, fontSize: 12, borderRadius: 14, strokeWidth: 1 },
     pill: { height: 48, padding: { top: 6, bottom: 6, left: 14, right: 14 }, iconSize: 19, fontSize: 14, borderRadius: 51, strokeWidth: 3 },
   };
 

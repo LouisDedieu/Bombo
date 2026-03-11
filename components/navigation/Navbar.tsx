@@ -20,6 +20,7 @@ import Icon from 'react-native-remix-icon';
 import { cn } from '@/components/ui/utils';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { Input } from '@/components/Input';
+import { isValidUrl } from '@/services/inboxService';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -68,6 +69,11 @@ export interface NavbarProps extends Omit<ViewProps, 'children'> {
   inputValue?: string;
   /** Called when input changes (for expanded mode) */
   onInputChange?: (value: string) => void;
+  /**
+   * Called when the user submits a URL via an action button.
+   * Receives the current inputValue and the action that was pressed.
+   */
+  onSubmit?: (url: string, action: NavbarAction) => void;
   /** Extra class names */
   className?: string;
   /** Container style */
@@ -111,10 +117,10 @@ const SIZE_CONFIG = {
       navbarHeight: 61,
       expandedHeight: 122,
       indicatorWidth: 94,
-      iconSize: 20,
+      iconSize: 22,
       fontSize: 13,
       padding: 3,
-      tabHeight: 54
+      tabHeight: 54,
     },
   },
   secondary: {
@@ -131,7 +137,7 @@ const SIZE_CONFIG = {
       tabHeight: 25,
       iconSize: 13,
       fontSize: 12,
-      padding: 4,
+      padding: 2.5,
       badgeSize: 12,
     },
   },
@@ -142,16 +148,16 @@ const SIZE_CONFIG = {
 // ---------------------------------------------------------------------------
 
 function PrimaryNavbarItem({
-  icon,
-  label,
-  active,
-  onPress,
-  onPressIn,
-  onPressOut,
-  tabHeight,
-  iconSize,
-  fontSize,
-}: {
+                             icon,
+                             label,
+                             active,
+                             onPress,
+                             onPressIn,
+                             onPressOut,
+                             tabHeight,
+                             iconSize,
+                             fontSize,
+                           }: {
   icon: string;
   label: string;
   active: boolean;
@@ -197,18 +203,18 @@ function PrimaryNavbarItem({
 // ---------------------------------------------------------------------------
 
 function SecondaryNavbarItem({
-  icon,
-  label,
-  badge,
-  active,
-  onPress,
-  onPressIn,
-  onPressOut,
-  tabHeight,
-  iconSize,
-  fontSize,
-  badgeSize,
-}: {
+                               icon,
+                               label,
+                               badge,
+                               active,
+                               onPress,
+                               onPressIn,
+                               onPressOut,
+                               tabHeight,
+                               iconSize,
+                               fontSize,
+                               badgeSize,
+                             }: {
   icon: string;
   label: string;
   badge?: number;
@@ -283,14 +289,14 @@ function SecondaryNavbarItem({
 // ---------------------------------------------------------------------------
 
 function AnimatedIndicator({
-  activeIndex,
-  tabCount,
-  containerWidth,
-  variant,
-  tabHeight,
-  padding,
-  isPressed,
-}: {
+                             activeIndex,
+                             tabCount,
+                             containerWidth,
+                             variant,
+                             tabHeight,
+                             padding,
+                             isPressed,
+                           }: {
   activeIndex: number;
   tabCount: number;
   containerWidth: number;
@@ -299,36 +305,25 @@ function AnimatedIndicator({
   padding: number;
   isPressed: Animated.SharedValue<boolean>;
 }) {
-  // Calculate indicator position and width
-  const getIndicatorPosition = (index: number) => {
-    const availableWidth = containerWidth - padding * 2;
-    const tabWidth = availableWidth / tabCount;
-    return padding + index * tabWidth;
-  };
+  const indicatorWidth =
+    variant === 'primary'
+      ? SIZE_CONFIG.primary.default.indicatorWidth
+      : containerWidth / tabCount - padding;
 
-  const indicatorWidth = (containerWidth - padding * 2) / tabCount;
+  const tabWidth = containerWidth / tabCount;
 
-  // Initialize with correct position (no animation on mount)
-  const translateX = useSharedValue(getIndicatorPosition(activeIndex));
-  const isFirstRender = useSharedValue(true);
-
-  useEffect(() => {
-    if (isFirstRender.value) {
-      // Skip animation on first render, just set the position
-      translateX.value = getIndicatorPosition(activeIndex);
-      isFirstRender.value = false;
-    } else {
-      // Animate on subsequent changes
-      translateX.value = withSpring(getIndicatorPosition(activeIndex), SPRING_CONFIG);
-    }
-  }, [activeIndex, containerWidth, tabCount]);
-
-  // Animated scale values
+  const translateX = useSharedValue(activeIndex * tabWidth + (tabWidth - indicatorWidth) / 2);
   const scaleX = useSharedValue(1);
   const scaleY = useSharedValue(1);
 
+  useEffect(() => {
+    translateX.value = withSpring(
+      activeIndex * tabWidth + (tabWidth - indicatorWidth) / 2,
+      SPRING_CONFIG
+    );
+  }, [activeIndex, tabWidth, indicatorWidth]);
+
   const animatedStyle = useAnimatedStyle(() => {
-    // Scale animation based on press state - punchy squish effect
     if (isPressed.value) {
       scaleX.value = withSpring(1.08, { damping: 8, stiffness: 600, mass: 0.5 });
       scaleY.value = withSpring(0.88, { damping: 8, stiffness: 600, mass: 0.5 });
@@ -360,7 +355,6 @@ function AnimatedIndicator({
           backgroundColor: bgColor,
           borderRadius: 30,
           zIndex: 1,
-          // Shadow for secondary variant
           ...(variant === 'secondary' && {
             shadowColor: 'rgba(63, 63, 63, 0.23)',
             shadowOffset: { width: 0, height: 4 },
@@ -380,38 +374,34 @@ function AnimatedIndicator({
 // ---------------------------------------------------------------------------
 
 export function Navbar({
-  tabs,
-  activeIndex = 0,
-  onTabChange,
-  variant = 'primary',
-  size = 'default',
-  expanded = false,
-  actions,
-  inputPlaceholder = 'Coller votre lien ici...',
-  inputValue,
-  onInputChange,
-  className,
-  style,
-  ...props
-}: NavbarProps) {
-  // Get size config based on variant
-  const sizeConfig = variant === 'primary'
-    ? SIZE_CONFIG.primary.default
-    : SIZE_CONFIG.secondary[size];
+                         tabs,
+                         activeIndex = 0,
+                         onTabChange,
+                         variant = 'primary',
+                         size = 'default',
+                         expanded = false,
+                         actions,
+                         inputPlaceholder = 'Coller votre lien ici...',
+                         inputValue,
+                         onInputChange,
+                         onSubmit,
+                         className,
+                         style,
+                         ...props
+                       }: NavbarProps) {
+  const sizeConfig =
+    variant === 'primary' ? SIZE_CONFIG.primary.default : SIZE_CONFIG.secondary[size];
 
-  const navbarHeight = variant === 'primary' && expanded
-    ? SIZE_CONFIG.primary.default.expandedHeight
-    : sizeConfig.navbarHeight;
-
-  // Container width state (needs to be measured before showing indicator)
   const [containerWidth, setContainerWidth] = useState(0);
 
-  // Animated values
-  const heightValue = useSharedValue(navbarHeight);
+  const heightValue = useSharedValue(
+    variant === 'primary' && expanded
+      ? SIZE_CONFIG.primary.default.expandedHeight
+      : sizeConfig.navbarHeight
+  );
   const expandProgress = useSharedValue(expanded ? 1 : 0);
   const indicatorPressed = useSharedValue(false);
 
-  // Update animations when expanded changes (primary only)
   useEffect(() => {
     if (variant === 'primary') {
       heightValue.value = withSpring(
@@ -425,36 +415,29 @@ export function Navbar({
     }
   }, [expanded, variant]);
 
-  // Animated container style
   const animatedContainerStyle = useAnimatedStyle(() => ({
     height: variant === 'primary' ? heightValue.value : sizeConfig.navbarHeight,
   }));
 
-  // Animated content styles for expanded mode
   const actionsAnimatedStyle = useAnimatedStyle(() => ({
     opacity: expandProgress.value,
-    transform: [
-      { translateY: interpolate(expandProgress.value, [0, 1], [-10, 0]) },
-    ],
+    transform: [{ translateY: interpolate(expandProgress.value, [0, 1], [-10, 0]) }],
   }));
 
   const inputAnimatedStyle = useAnimatedStyle(() => ({
     opacity: expandProgress.value,
-    transform: [
-      { translateY: interpolate(expandProgress.value, [0, 1], [10, 0]) },
-    ],
+    transform: [{ translateY: interpolate(expandProgress.value, [0, 1], [10, 0]) }],
   }));
 
-  // Animated style for tabs (fade out in expanded mode)
   const tabsAnimatedStyle = useAnimatedStyle(() => ({
     opacity: interpolate(expandProgress.value, [0, 1], [1, 0]),
-    transform: [
-      { scale: interpolate(expandProgress.value, [0, 1], [1, 0.95]) },
-    ],
+    transform: [{ scale: interpolate(expandProgress.value, [0, 1], [1, 0.95]) }],
   }));
 
-  // Get colors based on variant
   const colors = variant === 'primary' ? PRIMARY_COLORS : SECONDARY_COLORS;
+
+  // Derived: is the current inputValue a valid URL?
+  const isValidInput = isValidUrl(inputValue ?? '');
 
   return (
     <Animated.View
@@ -476,13 +459,7 @@ export function Navbar({
         colors={[...colors.outerGradient]}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-        }}
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
       />
 
       {/* Inner fill gradient */}
@@ -490,7 +467,7 @@ export function Navbar({
         colors={[...colors.innerGradient]}
         start={{ x: 0.5, y: variant === 'primary' ? 1 : 0 }}
         end={{ x: 0.5, y: variant === 'primary' ? 0 : 1 }}
-        locations={variant === 'primary' ? [0.375, 1] : [0.375, 1]}
+        locations={[0.375, 1]}
         style={{
           position: 'absolute',
           top: sizeConfig.padding,
@@ -502,7 +479,7 @@ export function Navbar({
       />
 
       {variant === 'primary' && expanded ? (
-        // Expanded layout with actions and input (primary only)
+        // ── Expanded layout ────────────────────────────────────────────────
         <View style={{ flex: 1, padding: sizeConfig.padding, justifyContent: 'flex-end' }}>
           {/* Action buttons row */}
           {actions && actions.length > 0 && (
@@ -524,9 +501,16 @@ export function Navbar({
                   leftIcon={action.icon}
                   title={action.label}
                   color={action.color}
-                  onPress={action.onPress}
                   size="pill"
                   style={{ flex: 1 }}
+                  disabled={!isValidInput}
+                  onPress={() => {
+                    // Call the action's own handler (if any), then bubble up
+                    action.onPress?.();
+                    if (isValidInput && inputValue) {
+                      onSubmit?.(inputValue.trim(), action);
+                    }
+                  }}
                 />
               ))}
             </Animated.View>
@@ -539,11 +523,21 @@ export function Navbar({
               onChangeText={onInputChange}
               placeholder={inputPlaceholder}
               leftIcon="link"
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+              onSubmitEditing={() => {
+                // Allow submitting via keyboard "Go" — use first action or generic submit
+                if (isValidInput && inputValue && actions?.[0]) {
+                  onSubmit?.(inputValue.trim(), actions[0]);
+                }
+              }}
+              returnKeyType="go"
             />
           </Animated.View>
         </View>
       ) : (
-        // Tabs layout
+        // ── Tabs layout ────────────────────────────────────────────────────
         <Animated.View
           style={[
             {
@@ -554,11 +548,8 @@ export function Navbar({
             },
             variant === 'primary' ? tabsAnimatedStyle : undefined,
           ]}
-          onLayout={(e) => {
-            setContainerWidth(e.nativeEvent.layout.width);
-          }}
+          onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
         >
-          {/* Active indicator - only render when we have measured width */}
           {containerWidth > 0 && (
             <AnimatedIndicator
               activeIndex={activeIndex}
@@ -571,8 +562,7 @@ export function Navbar({
             />
           )}
 
-          {/* Tab items */}
-          {tabs.map((tab, index) => (
+          {tabs.map((tab, index) =>
             variant === 'primary' ? (
               <PrimaryNavbarItem
                 key={index}
@@ -583,12 +573,8 @@ export function Navbar({
                   tab.onPress?.();
                   onTabChange?.(index);
                 }}
-                onPressIn={() => {
-                  indicatorPressed.value = true;
-                }}
-                onPressOut={() => {
-                  indicatorPressed.value = false;
-                }}
+                onPressIn={() => { indicatorPressed.value = true; }}
+                onPressOut={() => { indicatorPressed.value = false; }}
                 tabHeight={sizeConfig.tabHeight}
                 iconSize={sizeConfig.iconSize}
                 fontSize={sizeConfig.fontSize}
@@ -604,19 +590,15 @@ export function Navbar({
                   tab.onPress?.();
                   onTabChange?.(index);
                 }}
-                onPressIn={() => {
-                  indicatorPressed.value = true;
-                }}
-                onPressOut={() => {
-                  indicatorPressed.value = false;
-                }}
+                onPressIn={() => { indicatorPressed.value = true; }}
+                onPressOut={() => { indicatorPressed.value = false; }}
                 tabHeight={sizeConfig.tabHeight}
                 iconSize={sizeConfig.iconSize}
                 fontSize={sizeConfig.fontSize}
                 badgeSize={(sizeConfig as typeof SIZE_CONFIG.secondary.default).badgeSize || 15}
               />
             )
-          ))}
+          )}
         </Animated.View>
       )}
     </Animated.View>

@@ -16,24 +16,18 @@ import {
   Animated,
   Easing,
   Alert,
-  Platform,
 } from 'react-native';
 import { Navbar } from '@/components/navigation/Navbar';
 import Loader from '@/components/Loader';
 import { ContentCard } from '@/components/ContentCard';
 import { colors } from '@/constants/colors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Constants from 'expo-constants';
-
-// Check if using native tabs (iOS 26+) which handles safe area automatically
-const isExpoGo = Constants.appOwnership === 'expo';
-const useNativeTabs = Platform.OS === 'ios' && parseInt(String(Platform.Version), 10) >= 26 && !isExpoGo;
 import { useRouter } from 'expo-router';
-import { Map, Building2 } from 'lucide-react-native';
 import { useAuth } from '@/context/AuthContext';
 import { deleteTrip } from '@/services/tripService';
 import { deleteCity } from '@/services/cityService';
 import { getUserSavedItems, SavedItem } from '@/services/savedService';
+import Icon from "react-native-remix-icon";
 
 // -- Filter type (without 'all') ----------------------------------------------
 
@@ -147,17 +141,31 @@ export default function SavedPage() {
 
   // Delete handler
   const handleDelete = async (item: SavedItem) => {
-    try {
-      if (item.entity_type === 'city') {
-        await deleteCity(item.entity_id);
-        setCityItems((prev) => prev.filter((i) => i.id !== item.id));
-      } else {
-        await deleteTrip(item.entity_id);
-        setTripItems((prev) => prev.filter((i) => i.id !== item.id));
-      }
-    } catch (err) {
-      Alert.alert('Erreur', 'Impossible de supprimer.');
-    }
+    const alertTitle = item.entity_type === 'city' ? 'Supprimer la ville ?' : 'Supprimer le voyage ?';
+    Alert.alert(
+      alertTitle,
+      `Toutes les données associées à "${item.title}" seront supprimées définitivement.`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              if (item.entity_type === 'city') {
+                await deleteCity(item.entity_id);
+                setCityItems((prev) => prev.filter((i) => i.id !== item.id));
+              } else {
+                await deleteTrip(item.entity_id);
+                setTripItems((prev) => prev.filter((i) => i.id !== item.id));
+              }
+            } catch (err) {
+              Alert.alert('Erreur', 'Impossible de supprimer.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   // Navigation handler
@@ -178,10 +186,10 @@ export default function SavedPage() {
         resizeMode="cover"
       >
         <View
-          className="flex-1 items-center justify-center"
-          style={{ paddingTop: insets.top }}
+          className="flex-1 justify-center items-center"
+          style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}
         >
-          <Loader size={72} />
+          <Loader />
         </View>
       </ImageBackground>
     );
@@ -301,6 +309,7 @@ export default function SavedPage() {
           return (
             <TouchableOpacity
               onPress={() => handlePress(item)}
+              onLongPress={() => handleDelete(item)}
               activeOpacity={0.8}
             >
               {item.entity_type === 'trip' ? (
@@ -367,7 +376,7 @@ function EmptyState({ filter }: { filter: FilterType }) {
   }, []);
 
   const isCity = filter === 'city';
-  const Icon = isCity ? Building2 : Map;
+  const icon = isCity ? 'building-line' : 'signpost-line';
   const title = isCity ? 'Aucun guide de ville' : 'Aucun voyage';
   const subtitle = isCity
     ? "Analysez des videos de type 'city guide' pour decouvrir des villes."
@@ -379,10 +388,10 @@ function EmptyState({ filter }: { filter: FilterType }) {
       className="items-center py-16"
     >
       <View className="w-20 h-20 bg-bg-primary/50 rounded-full items-center justify-center mb-4">
-        <Icon size={40} color={colors.textMuted} />
+        <Icon name={icon} size={40} color={colors.textMuted} />
       </View>
       <Text className="text-xl font-dmsans-medium text-text-primary mb-2">{title}</Text>
-      <Text className="text-text-secondary text-center" style={{ maxWidth: 280 }}>
+      <Text className="text-text-secondary font-dmsans text-center" style={{ maxWidth: 280 }}>
         {subtitle}
       </Text>
     </Animated.View>

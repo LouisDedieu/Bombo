@@ -30,6 +30,7 @@ import { SharePromotionCard } from '@/components/SharePromotionCard';
 import { JobCard } from '@/components/JobCard';
 import Loader from '@/components/Loader';
 import { useAuth } from '@/context/AuthContext';
+import { useAnalysis } from '@/context/AnalysisContext';
 
 import {
   type InboxJob,
@@ -248,14 +249,14 @@ interface JobsListProps {
 }
 
 function JobsList({
-  jobs,
-  onAnalysisStarted,
-  onDeleteJob,
-  onJobPress,
-  onRefresh,
-  isSubmitting,
-  isRefreshing,
-}: JobsListProps) {
+                    jobs,
+                    onAnalysisStarted,
+                    onDeleteJob,
+                    onJobPress,
+                    onRefresh,
+                    isSubmitting,
+                    isRefreshing,
+                  }: JobsListProps) {
   const insets = useSafeAreaInsets();
   const [videoUrl, setVideoUrl] = useState('');
 
@@ -282,7 +283,10 @@ function JobsList({
             textShadowRadius: 4,
           }}
         >
-          vidéo.
+          vidéo
+        </Text>
+        <Text className="font-righteous text-title text-text-primary">
+          {' '}en itinéraire.
         </Text>
       </View>
 
@@ -416,6 +420,7 @@ function ErrorState({ error, onRetry }: { error: string; onRetry: () => void }) 
 export default function InboxPage() {
   const router = useRouter();
   const { user } = useAuth();
+  const { registerHandler, unregisterHandler } = useAnalysis();
   const [jobs, setJobs] = useState<InboxJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -467,7 +472,7 @@ export default function InboxPage() {
   }, [inProgressCount, loadJobs]);
 
   // Start analysis
-  const handleAnalysisStarted = async (url: string) => {
+  const handleAnalysisStarted = useCallback(async (url: string) => {
     if (!user?.id) return;
 
     setIsSubmitting(true);
@@ -496,7 +501,13 @@ export default function InboxPage() {
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }, [user?.id, loadJobs]);
+
+  // Register / unregister handler so the TabBar can trigger analysis from anywhere
+  useEffect(() => {
+    registerHandler(handleAnalysisStarted);
+    return () => unregisterHandler();
+  }, [handleAnalysisStarted, registerHandler, unregisterHandler]);
 
   // Delete job
   const handleDeleteJob = (job: InboxJob) => {

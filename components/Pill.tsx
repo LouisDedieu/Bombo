@@ -9,6 +9,7 @@ export interface PillProps {
   label: string;
   backgroundColor: string;
   textColor: string;
+  fontFamily?: string;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -16,7 +17,7 @@ export interface PillProps {
 // Pill Component
 // ---------------------------------------------------------------------------
 
-export function Pill({ label, backgroundColor, textColor, style }: PillProps) {
+export function Pill({ label, backgroundColor, textColor, fontFamily = 'DMSans', style }: PillProps) {
   return (
     <View
       style={[
@@ -38,7 +39,7 @@ export function Pill({ label, backgroundColor, textColor, style }: PillProps) {
     >
       <Text
         style={{
-          fontFamily: 'DMSans',
+          fontFamily,
           fontSize: 8,
           lineHeight: 10,
           color: textColor,

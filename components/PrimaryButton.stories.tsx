@@ -282,7 +282,7 @@ export const OnDarkBackground: Story = {
         <PrimaryButton title="Trip" leftIcon="login-box-line" size="sm" color="green" />
       </View>
 
-      <PrimaryButton title="Voir en détails" showArrow color="blue" fullWidth />
+      <PrimaryButton title="Voir en détails" showArrow color="accent" fullWidth />
     </View>
   ),
 };

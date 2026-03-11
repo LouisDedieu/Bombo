@@ -4,33 +4,20 @@
  * City review page with drag & drop highlight reordering
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
   Pressable,
-  Animated,
-  Easing,
-  Linking,
   Alert,
   TextInput,
   Modal,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import {
-  ArrowLeft,
-  Check,
-  MapPin,
-  Loader2,
-  ExternalLink,
-  Trash2,
-  Merge,
-  X,
-  Plus,
-} from 'lucide-react-native';
+import Icon from 'react-native-remix-icon';
 import DraggableFlatList, {
   ScaleDecorator,
   RenderItemParams,
@@ -52,30 +39,10 @@ import {
 } from '@/services/cityReviewService';
 import { Highlight, HighlightCategory, HIGHLIGHT_CATEGORIES } from '@/types/api';
 import { HighlightReviewCard } from '@/components/city/HighlightReviewCard';
-import { CategoryFilterChips, CATEGORY_COLORS } from '@/components/city/CategoryFilterChips';
 import { Button } from '@/components/Button';
-
-// ── SpinningLoader ─────────────────────────────────────────────────────────────
-
-function SpinningLoader({ size = 16, color = '#60a5fa' }: { size?: number; color?: string }) {
-  const rotation = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.loop(
-      Animated.timing(rotation, {
-        toValue: 1,
-        duration: 1000,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      })
-    ).start();
-  }, []);
-  const spin = rotation.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
-  return (
-    <Animated.View style={{ transform: [{ rotate: spin }] }}>
-      <Loader2 size={size} color={color} />
-    </Animated.View>
-  );
-}
+import {PrimaryButton} from "@/components/PrimaryButton";
+import {SecondaryButton} from "@/components/SecondaryButton";
+import Loader from "@/components/Loader";
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 
@@ -267,12 +234,12 @@ export default function CityReviewPage() {
         setCity((p) =>
           p
             ? {
-                ...p,
-                highlights: p.highlights.map((h) => ({
-                  ...h,
-                  validated: prev.find((u) => u.id === h.id)?.val ?? h.validated,
-                })),
-              }
+              ...p,
+              highlights: p.highlights.map((h) => ({
+                ...h,
+                validated: prev.find((u) => u.id === h.id)?.val ?? h.validated,
+              })),
+            }
             : p
         );
       }
@@ -418,7 +385,7 @@ export default function CityReviewPage() {
   if (loading) {
     return (
       <View className="flex-1 items-center justify-center">
-        <SpinningLoader size={32} color="#60a5fa" />
+        <Loader size={32} color="#60a5fa" />
       </View>
     );
   }
@@ -426,7 +393,7 @@ export default function CityReviewPage() {
   if (!city) {
     return (
       <View className="flex-1 items-center justify-center gap-4">
-        <Text className="text-zinc-400">Ville introuvable</Text>
+        <Text className="text-white/60">Ville introuvable</Text>
         <Button onPress={() => router.navigate('/(tabs)')}>Retour</Button>
       </View>
     );
@@ -440,25 +407,25 @@ export default function CityReviewPage() {
   const footerBg = isSaved
     ? '#b91c1c' // red-700
     : validatedCount === 0
-    ? '#3f3f46' // zinc-700
-    : '#a855f7'; // purple-500 for cities
+      ? '#3f3f46' // zinc-700
+      : '#a855f7'; // purple-500 for cities
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0)' }}>
       <View className="flex-1">
         {/* ── Header ── */}
         <View
-          className="bg-zinc-900 px-4 py-4"
+          className="bg-[#1e1a64] px-4 py-4"
           style={{
             paddingTop: insets.top + 16,
             borderBottomWidth: 1,
-            borderBottomColor: '#27272a',
+            borderBottomColor: 'rgba(255,255,255,0.1)',
           }}
         >
           <View className="flex-row items-center gap-3">
             <Pressable onPress={() => router.navigate('/(tabs)')} style={{ padding: 8 }}>
               <View pointerEvents="none">
-                <ArrowLeft size={24} color="#a1a1aa" />
+                <Icon name={'arrow-left-s-line'} size={24} color="rgba(255,255,255,0.6)" />
               </View>
             </Pressable>
             <View className="flex-1 min-w-0">
@@ -466,8 +433,8 @@ export default function CityReviewPage() {
                 {city.city_title}
               </Text>
               <View className="flex-row items-center gap-1 mt-0.5">
-                <MapPin size={12} color="#a855f7" />
-                <Text className="text-sm text-zinc-400">
+                <Icon name={'map-pin-2-line'} size={12} color="#a855f7" />
+                <Text className="text-sm text-white/60">
                   {city.city_name}, {city.country} · {totalHighlights} points
                 </Text>
               </View>
@@ -490,13 +457,13 @@ export default function CityReviewPage() {
                 <View
                   className="mx-4 mt-3 rounded-xl p-3"
                   style={{
-                    backgroundColor: '#7c3aed22',
+                    backgroundColor: 'rgba(168,85,247,0.1)',
                     borderWidth: 1,
-                    borderColor: '#7c3aed4D',
+                    borderColor: 'rgba(168,85,247,0.3)',
                   }}
                 >
                   <View className="flex-row items-center gap-2">
-                    <Merge size={18} color="#a78bfa" />
+                    <Icon name={'merge-cells-horizontal'} size={18} color="#a855f7" />
                     <View className="flex-1">
                       <Text className="text-sm text-purple-300 font-medium">
                         {existingMatch.city_name} existe deja
@@ -505,27 +472,20 @@ export default function CityReviewPage() {
                         {existingMatch.highlights_count} existants · Ajouter {validatedCount} point{validatedCount > 1 ? 's' : ''}
                       </Text>
                     </View>
-                    <TouchableOpacity
+                    <PrimaryButton
+                      title={merging ? '' : 'Fusionner'}
+                      leftIcon={merging ? undefined : 'share-forward-line'}
                       onPress={handleMerge}
-                      disabled={merging || validatedCount === 0}
-                      className="px-3 py-1.5 rounded-lg"
-                      style={{
-                        backgroundColor: '#7c3aed',
-                        opacity: validatedCount === 0 ? 0.5 : 1,
-                      }}
-                    >
-                      {merging ? (
-                        <SpinningLoader size={14} color="#fff" />
-                      ) : (
-                        <Text className="text-white text-xs font-medium">Fusionner</Text>
-                      )}
-                    </TouchableOpacity>
+                      loading={merging}
+                      disabled={validatedCount === 0}
+                      size="sm"
+                    />
                     <TouchableOpacity
                       onPress={() => setShowMergeBanner(false)}
                       className="p-1"
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     >
-                      <X size={16} color="#a78bfa" />
+                      <Icon name={'close-line'} size={16} color="#a855f7" />
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -533,15 +493,15 @@ export default function CityReviewPage() {
 
               {/* Selection panel - compact */}
               <View
-                className="mx-4 mt-3 bg-zinc-900 rounded-xl p-3"
-                style={{ borderWidth: 1, borderColor: '#27272a' }}
+                className="mx-4 mt-3 bg-[#1e1a64] rounded-xl p-3"
+                style={{ borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}
               >
                 <View className="flex-row items-center justify-between">
                   <View className="flex-row items-center gap-2">
                     <Text className="text-sm font-medium text-white">
                       {validatedCount}/{totalHighlights}
                     </Text>
-                    <Text className="text-xs text-zinc-500">points</Text>
+                    <Text className="text-xs text-white/50">points</Text>
                   </View>
                   <View className="flex-row gap-1.5">
                     {(['Tout', 'Aucun'] as const).map((label) => {
@@ -550,24 +510,21 @@ export default function CityReviewPage() {
                         ? validatedCount === totalHighlights
                         : validatedCount === 0;
                       return (
-                        <TouchableOpacity
+                        <SecondaryButton
                           key={label}
+                          title={label}
+                          active={false}
+                          variant="pill"
+                          size="sm"
                           onPress={() => handleToggleAll(isAll)}
                           disabled={disabled}
-                          className="px-2 py-1 rounded"
-                          style={{
-                            backgroundColor: '#27272a',
-                            opacity: disabled ? 0.3 : 1,
-                          }}
-                        >
-                          <Text style={{ fontSize: 11, color: '#a1a1aa' }}>{label}</Text>
-                        </TouchableOpacity>
+                        />
                       );
                     })}
                   </View>
                 </View>
                 {/* Progress bar */}
-                <View className="h-1 bg-zinc-800 rounded-full overflow-hidden mt-2">
+                <View className="h-1 bg-white/10 rounded-full overflow-hidden mt-2">
                   <View
                     className="h-full rounded-full"
                     style={{ width: `${progressPct}%`, backgroundColor: '#a855f7' }}
@@ -575,71 +532,80 @@ export default function CityReviewPage() {
                 </View>
               </View>
 
-              {/* Category filters - horizontal scroll, minimal height */}
-              <CategoryFilterChips
-                selectedCategories={selectedCategories}
-                categoryCounts={categoryCounts}
-                onToggle={handleToggleCategory}
-              />
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ paddingHorizontal: 16, gap: 6 }}
+                style={{ paddingVertical: 8 }}
+              >
+                {(Object.keys(HIGHLIGHT_CATEGORIES) as HighlightCategory[]).map((cat) => {
+                  const count = categoryCounts[cat] || 0;
+                  if (count === 0) return null;
+                  return (
+                    <SecondaryButton
+                      key={cat}
+                      title={String(count)}
+                      active={selectedCategories.includes(cat)}
+                      leftIcon={HIGHLIGHT_CATEGORIES[cat].icon}
+                      variant="pill"
+                      size="sm"
+                      colorScheme={cat}
+                      onPress={() => handleToggleCategory(cat)}
+                    />
+                  );
+                })}
+              </ScrollView>
 
               {/* Add highlight button */}
-              <TouchableOpacity
-                onPress={() => setShowAddModal(true)}
-                className="mx-4 mt-3 flex-row items-center justify-center gap-2 py-3 rounded-xl"
-                style={{
-                  backgroundColor: '#27272a',
-                  borderWidth: 1,
-                  borderColor: '#3f3f46',
-                  borderStyle: 'dashed',
-                }}
-              >
-                <Plus size={18} color="#a855f7" />
-                <Text className="text-purple-400 font-medium">Ajouter un point</Text>
-              </TouchableOpacity>
+              <View className="mx-4 mt-3 my-2">
+                <SecondaryButton
+                  title="Ajouter un point"
+                  leftIcon="add-line"
+                  onPress={() => setShowAddModal(true)}
+                  variant={'square'}
+                  style={{ height: 30 }}
+                />
+              </View>
             </View>
           }
           ListEmptyComponent={
             <View className="items-center justify-center py-12">
-              <Text className="text-zinc-500">Aucun point dans cette categorie</Text>
+              <Text className="text-white/50">Aucun point dans cette categorie</Text>
             </View>
           }
         />
 
         {/* ── Footer sticky ── */}
         <View
-          className="absolute bottom-0 left-0 right-0 px-4 py-4 bg-black"
-          style={{ borderTopWidth: 1, borderTopColor: '#27272a' }}
+          className="absolute left-0 right-0 bottom-0 px-4 py-4 bg-bg-primary"
+          style={{ paddingBottom: insets.bottom, borderTopWidth: 2, borderTopColor: 'rgba(255,255,255,0.1)' }}
         >
-          <TouchableOpacity
-            onPress={handleValidate}
-            disabled={validating || validatedCount === 0}
-            className="w-full flex-row items-center justify-center gap-2 py-3 rounded-xl"
-            style={{
-              backgroundColor: footerBg,
-              opacity: validatedCount === 0 && !isSaved ? 0.6 : 1,
-            }}
-          >
-            {validating ? (
-              <>
-                <SpinningLoader size={16} color="#fff" />
-                <Text style={{ color: '#fff', fontWeight: '500' }}>Chargement...</Text>
-              </>
-            ) : isSaved ? (
-              <>
-                <Trash2 size={16} color="#fff" />
-                <Text style={{ color: '#fff', fontWeight: '500' }}>Retirer de ma collection</Text>
-              </>
-            ) : validatedCount === 0 ? (
-              <Text style={{ color: '#fff', fontWeight: '500' }}>Selectionne au moins un point</Text>
-            ) : (
-              <>
-                <Check size={16} color="#fff" />
-                <Text style={{ color: '#fff', fontWeight: '500' }}>
-                  Sauvegarder {validatedCount} point{validatedCount > 1 ? 's' : ''}
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
+          {isSaved ? (
+            <PrimaryButton
+              title="Retirer de ma collection"
+              leftIcon="delete-bin-line"
+              onPress={handleValidate}
+              loading={validating}
+              color="purple"
+              fullWidth
+            />
+          ) : validatedCount === 0 ? (
+            <PrimaryButton
+              title="Sélectionne au moins un point"
+              leftIcon="information-line"
+              onPress={() => {}}
+              disabled
+              fullWidth
+            />
+          ) : (
+            <PrimaryButton
+              title={`Sauvegarder ${validatedCount} point${validatedCount > 1 ? 's' : ''}`}
+              leftIcon="check-line"
+              onPress={handleValidate}
+              loading={validating}
+              fullWidth
+            />
+          )}
         </View>
 
         {/* ── Add Highlight Modal ── */}
@@ -651,14 +617,14 @@ export default function CityReviewPage() {
         >
           <View className="flex-1 justify-end" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
             <View
-              className="bg-zinc-900 rounded-t-3xl p-4"
+              className="bg-[#1e1a64] rounded-t-3xl p-4"
               style={{ paddingBottom: insets.bottom + 16 }}
             >
               {/* Header */}
               <View className="flex-row items-center justify-between mb-4">
                 <Text className="text-lg font-bold text-white">Ajouter un point</Text>
                 <TouchableOpacity onPress={() => setShowAddModal(false)} className="p-2">
-                  <X size={20} color="#71717a" />
+                  <Icon name={'close-line'} size={20} color="rgba(255,255,255,0.5)" />
                 </TouchableOpacity>
               </View>
 
@@ -666,40 +632,34 @@ export default function CityReviewPage() {
               <View className="gap-4">
                 {/* Name */}
                 <View>
-                  <Text className="text-xs text-zinc-500 uppercase mb-1">Nom *</Text>
+                  <Text className="text-xs text-white/50 uppercase mb-1">Nom *</Text>
                   <TextInput
                     value={newHighlight.name}
                     onChangeText={(v) => setNewHighlight((f) => ({ ...f, name: v }))}
                     placeholder="Ex: Tour Eiffel, Cafe de Flore..."
-                    placeholderTextColor="#52525b"
+                    placeholderTextColor="rgba(255,255,255,0.3)"
                     className="rounded-lg px-3 py-3 text-white"
-                    style={{ backgroundColor: '#27272a', borderWidth: 1, borderColor: '#3f3f46' }}
+                    style={{ backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}
                   />
                 </View>
 
                 {/* Category */}
                 <View>
-                  <Text className="text-xs text-zinc-500 uppercase mb-1">Catégorie</Text>
+                  <Text className="text-xs text-white/50 uppercase mb-1">Catégorie</Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                     <View className="flex-row gap-2">
                       {(Object.keys(HIGHLIGHT_CATEGORIES) as HighlightCategory[]).map((cat) => {
                         const isSelected = newHighlight.category === cat;
-                        const catColor = CATEGORY_COLORS[cat];
                         return (
-                          <TouchableOpacity
+                          <SecondaryButton
                             key={cat}
+                            title={HIGHLIGHT_CATEGORIES[cat].label}
+                            active={isSelected}
+                            variant="pill"
+                            size="sm"
+                            colorScheme={HIGHLIGHT_CATEGORIES[cat].label}
                             onPress={() => setNewHighlight((f) => ({ ...f, category: cat }))}
-                            className="px-3 py-2 rounded-lg"
-                            style={{
-                              backgroundColor: isSelected ? `${catColor}33` : '#27272a',
-                              borderWidth: 1,
-                              borderColor: isSelected ? `${catColor}4D` : '#3f3f46',
-                            }}
-                          >
-                            <Text style={{ fontSize: 13, color: isSelected ? catColor : '#a1a1aa' }}>
-                              {HIGHLIGHT_CATEGORIES[cat].label}
-                            </Text>
-                          </TouchableOpacity>
+                          />
                         );
                       })}
                     </View>
@@ -708,34 +668,26 @@ export default function CityReviewPage() {
 
                 {/* Address */}
                 <View>
-                  <Text className="text-xs text-zinc-500 uppercase mb-1">Adresse</Text>
+                  <Text className="text-xs text-white/50 uppercase mb-1">Adresse</Text>
                   <TextInput
                     value={newHighlight.address ?? ''}
                     onChangeText={(v) => setNewHighlight((f) => ({ ...f, address: v }))}
                     placeholder="Optionnel"
-                    placeholderTextColor="#52525b"
+                    placeholderTextColor="rgba(255,255,255,0.3)"
                     className="rounded-lg px-3 py-3 text-white"
-                    style={{ backgroundColor: '#27272a', borderWidth: 1, borderColor: '#3f3f46' }}
+                    style={{ backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}
                   />
                 </View>
 
                 {/* Submit */}
-                <TouchableOpacity
+                <PrimaryButton
+                  title="Ajouter"
+                  leftIcon={addingHighlight ? undefined : 'add-line'}
                   onPress={handleAddHighlight}
-                  disabled={addingHighlight || !newHighlight.name.trim()}
-                  className="flex-row items-center justify-center gap-2 py-3 rounded-xl mt-2"
-                  style={{
-                    backgroundColor: '#a855f7',
-                    opacity: !newHighlight.name.trim() ? 0.5 : 1,
-                  }}
-                >
-                  {addingHighlight ? (
-                    <SpinningLoader size={16} color="#fff" />
-                  ) : (
-                    <Plus size={18} color="#fff" />
-                  )}
-                  <Text className="text-white font-medium">Ajouter</Text>
-                </TouchableOpacity>
+                  loading={addingHighlight}
+                  disabled={!newHighlight.name.trim()}
+                  fullWidth
+                />
               </View>
             </View>
           </View>

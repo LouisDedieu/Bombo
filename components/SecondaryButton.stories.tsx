@@ -67,6 +67,66 @@ export const AllVariants: Story = {
   ),
 };
 
+// Category color schemes - Active states
+export const CategoryColorsActive: Story = {
+  render: () => (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+      <SecondaryButton title="2" leftIcon="restaurant-line" active colorScheme="restaurant" />
+      <SecondaryButton title="1" leftIcon="bank-line" active colorScheme="culture" />
+      <SecondaryButton title="4" leftIcon="hand-heart-line" active colorScheme="nature" />
+      <SecondaryButton title="4" leftIcon="checkbox-line" active colorScheme="shopping" />
+      <SecondaryButton title="4" leftIcon="moon-line" active colorScheme="nightlife" />
+      <SecondaryButton title="4" leftIcon="map-pin-line" active colorScheme="location" />
+    </View>
+  ),
+};
+
+// Category color schemes - Inactive states
+export const CategoryColorsInactive: Story = {
+  render: () => (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+      <SecondaryButton title="2" leftIcon="restaurant-line" colorScheme="restaurant" />
+      <SecondaryButton title="1" leftIcon="bank-line" colorScheme="culture" />
+      <SecondaryButton title="4" leftIcon="hand-heart-line" colorScheme="nature" />
+      <SecondaryButton title="4" leftIcon="checkbox-line" colorScheme="shopping" />
+      <SecondaryButton title="4" leftIcon="moon-line" colorScheme="nightlife" />
+      <SecondaryButton title="4" leftIcon="map-pin-line" colorScheme="location" />
+    </View>
+  ),
+};
+
+// All category colors comparison (active vs inactive)
+export const CategoryColorsComparison: Story = {
+  render: () => (
+    <View style={{ gap: 16 }}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        <SecondaryButton title="2" leftIcon="restaurant-line" active colorScheme="restaurant" />
+        <SecondaryButton title="2" leftIcon="restaurant-line" colorScheme="restaurant" />
+      </View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        <SecondaryButton title="1" leftIcon="bank-line" active colorScheme="culture" />
+        <SecondaryButton title="1" leftIcon="bank-line" colorScheme="culture" />
+      </View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        <SecondaryButton title="4" leftIcon="hand-heart-line" active colorScheme="nature" />
+        <SecondaryButton title="4" leftIcon="hand-heart-line" colorScheme="nature" />
+      </View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        <SecondaryButton title="4" leftIcon="checkbox-line" active colorScheme="shopping" />
+        <SecondaryButton title="4" leftIcon="checkbox-line" colorScheme="shopping" />
+      </View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        <SecondaryButton title="4" leftIcon="moon-line" active colorScheme="nightlife" />
+        <SecondaryButton title="4" leftIcon="moon-line" colorScheme="nightlife" />
+      </View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        <SecondaryButton title="4" leftIcon="map-pin-line" active colorScheme="location" />
+        <SecondaryButton title="4" leftIcon="map-pin-line" colorScheme="location" />
+      </View>
+    </View>
+  ),
+};
+
 // Interactive filter tabs
 function FilterTabsDemo() {
   const [activeFilter, setActiveFilter] = useState<'all' | 'short' | 'medium' | 'long'>('all');
