@@ -393,7 +393,7 @@ export default function CityReviewPage() {
   if (!city) {
     return (
       <View className="flex-1 items-center justify-center gap-4">
-        <Text className="text-white/60">Ville introuvable</Text>
+        <Text className="text-white/60 font-dmsans">Ville introuvable</Text>
         <Button onPress={() => router.navigate('/(tabs)')}>Retour</Button>
       </View>
     );
@@ -429,12 +429,12 @@ export default function CityReviewPage() {
               </View>
             </Pressable>
             <View className="flex-1 min-w-0">
-              <Text className="text-lg font-bold text-white" numberOfLines={1}>
+              <Text className="text-lg font-bold text-white font-righteous" numberOfLines={1}>
                 {city.city_title}
               </Text>
               <View className="flex-row items-center gap-1 mt-0.5">
                 <Icon name={'map-pin-2-line'} size={12} color="#a855f7" />
-                <Text className="text-sm text-white/60">
+                <Text className="text-sm text-white/60 font-dmsans">
                   {city.city_name}, {city.country} · {totalHighlights} points
                 </Text>
               </View>
@@ -465,10 +465,10 @@ export default function CityReviewPage() {
                   <View className="flex-row items-center gap-2">
                     <Icon name={'merge-cells-horizontal'} size={18} color="#a855f7" />
                     <View className="flex-1">
-                      <Text className="text-sm text-purple-300 font-medium">
+                      <Text className="text-sm text-purple-300 font-dmsans-medium">
                         {existingMatch.city_name} existe deja
                       </Text>
-                      <Text className="text-xs text-purple-400 mt-0.5">
+                      <Text className="text-xs text-purple-400 mt-0.5 font-dmsans">
                         {existingMatch.highlights_count} existants · Ajouter {validatedCount} point{validatedCount > 1 ? 's' : ''}
                       </Text>
                     </View>
@@ -498,10 +498,10 @@ export default function CityReviewPage() {
               >
                 <View className="flex-row items-center justify-between">
                   <View className="flex-row items-center gap-2">
-                    <Text className="text-sm font-medium text-white">
+                    <Text className="text-sm font-medium text-white font-righteous">
                       {validatedCount}/{totalHighlights}
                     </Text>
-                    <Text className="text-xs text-white/50">points</Text>
+                    <Text className="text-xs text-white/50 font-dmsans">points</Text>
                   </View>
                   <View className="flex-row gap-1.5">
                     {(['Tout', 'Aucun'] as const).map((label) => {
@@ -570,7 +570,7 @@ export default function CityReviewPage() {
           }
           ListEmptyComponent={
             <View className="items-center justify-center py-12">
-              <Text className="text-white/50">Aucun point dans cette categorie</Text>
+              <Text className="text-white/50 font-dmsans">Aucun point dans cette categorie</Text>
             </View>
           }
         />
@@ -622,7 +622,7 @@ export default function CityReviewPage() {
             >
               {/* Header */}
               <View className="flex-row items-center justify-between mb-4">
-                <Text className="text-lg font-bold text-white">Ajouter un point</Text>
+                <Text className="text-lg font-bold text-white font-righteous">Ajouter un point</Text>
                 <TouchableOpacity onPress={() => setShowAddModal(false)} className="p-2">
                   <Icon name={'close-line'} size={20} color="rgba(255,255,255,0.5)" />
                 </TouchableOpacity>
@@ -632,7 +632,7 @@ export default function CityReviewPage() {
               <View className="gap-4">
                 {/* Name */}
                 <View>
-                  <Text className="text-xs text-white/50 uppercase mb-1">Nom *</Text>
+                  <Text className="text-xs text-white/50 uppercase mb-1 font-dmsans">Nom *</Text>
                   <TextInput
                     value={newHighlight.name}
                     onChangeText={(v) => setNewHighlight((f) => ({ ...f, name: v }))}
@@ -645,7 +645,7 @@ export default function CityReviewPage() {
 
                 {/* Category */}
                 <View>
-                  <Text className="text-xs text-white/50 uppercase mb-1">Catégorie</Text>
+                  <Text className="text-xs text-white/50 uppercase mb-1 font-dmsans">Catégorie</Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                     <View className="flex-row gap-2">
                       {(Object.keys(HIGHLIGHT_CATEGORIES) as HighlightCategory[]).map((cat) => {
@@ -657,7 +657,6 @@ export default function CityReviewPage() {
                             active={isSelected}
                             variant="pill"
                             size="sm"
-                            colorScheme={HIGHLIGHT_CATEGORIES[cat].label}
                             onPress={() => setNewHighlight((f) => ({ ...f, category: cat }))}
                           />
                         );
@@ -668,7 +667,7 @@ export default function CityReviewPage() {
 
                 {/* Address */}
                 <View>
-                  <Text className="text-xs text-white/50 uppercase mb-1">Adresse</Text>
+                  <Text className="text-xs text-white/50 uppercase mb-1 font-dmsans">Adresse</Text>
                   <TextInput
                     value={newHighlight.address ?? ''}
                     onChangeText={(v) => setNewHighlight((f) => ({ ...f, address: v }))}

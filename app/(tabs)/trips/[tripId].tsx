@@ -365,12 +365,12 @@ export default function TripDetailPage() {
         resizeMode="cover"
       >
         <View className="flex-1 items-center justify-center px-4" style={{ paddingTop: insets.top }}>
-          <Text className="text-zinc-400 text-sm mb-4">Voyage introuvable.</Text>
+          <Text className="text-zinc-400 text-sm mb-4 font-dmsans">Voyage introuvable.</Text>
           <TouchableOpacity
             onPress={() => router.replace('/(tabs)/trips')}
             className="bg-zinc-800 px-6 py-3 rounded-lg"
           >
-            <Text className="text-white font-medium">Mes voyages</Text>
+            <Text className="text-white font-medium font-dmsans">Mes voyages</Text>
           </TouchableOpacity>
         </View>
       </ImageBackground>
@@ -836,8 +836,8 @@ function StatCell({value, label }: {
 }) {
   return (
     <View className="flex-1 items-center gap-0.5 py-2">
-      <Text className="text-base font-bold text-white/80">{value}</Text>
-      <Text className="text-[10px] text-white/60">{label}</Text>
+      <Text className="text-base font-bold text-white/80 font-righteous">{value}</Text>
+      <Text className="text-[10px] text-white/60 font-dmsans">{label}</Text>
     </View>
   );
 }
@@ -846,7 +846,7 @@ function EmptyState({ message }: { message: string }) {
   return (
     <View className="items-center py-14">
       <Icon name={"information-2-fill"} size={32} color="#52525b" style={{ opacity: 0.4 }} />
-      <Text className="text-sm text-zinc-500 mt-2">{message}</Text>
+      <Text className="text-sm text-zinc-500 mt-2 font-dmsans">{message}</Text>
     </View>
   );
 }

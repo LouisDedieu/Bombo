@@ -55,7 +55,7 @@ function PasswordStrength({ password }: { password: string }) {
           />
         ))}
       </View>
-      <Text className="text-[11px] text-white/50 mt-1">{levels[score]}</Text>
+      <Text className="text-[11px] text-white/50 mt-1 font-dmsans">{levels[score]}</Text>
     </View>
   );
 }
@@ -89,7 +89,7 @@ function Field({
 }: FieldProps) {
   return (
     <View className="gap-1.5">
-      <Text className="text-[11px] font-semibold text-white/50 uppercase tracking-[0.8px]">{label}</Text>
+      <Text className="text-[11px] font-semibold text-white/50 uppercase tracking-[0.8px] font-dmsans">{label}</Text>
       <View
         className={`flex-row items-center bg-[#1e1a64] rounded-[10px] border ${
           error ? 'border-red-500/60' : 'border-white/10'
@@ -221,14 +221,14 @@ export default function Login() {
         <View className="w-16 h-16 rounded-full items-center justify-center mb-4 bg-blue-500/15 border border-blue-500/30">
           <Icon name="mail-check-line" size={28} color="#60a5fa" />
         </View>
-        <Text className="text-xl font-bold text-white mb-2.5 text-center">Vérifiez votre email</Text>
-        <Text className="text-sm text-white/50 text-center leading-[22px] mb-6">
+        <Text className="text-xl font-bold text-white mb-2.5 text-center font-righteous">Vérifiez votre email</Text>
+        <Text className="text-sm text-white/50 text-center leading-[22px] mb-6 font-dmsans">
           Un lien de confirmation a été envoyé à{' '}
-          <Text className="text-white font-semibold">{email}</Text>.
+          <Text className="text-white font-semibold font-dmsans">{email}</Text>.
           {'\n'}Cliquez dessus pour activer votre compte.
         </Text>
         <View className="bg-[#1e1a64] border border-white/10 rounded-[20px] p-5 gap-4 w-full">
-          <Text className="text-xs text-white/50 text-center">Vous n'avez rien reçu ?</Text>
+          <Text className="text-xs text-white/50 text-center font-dmsans">Vous n'avez rien reçu ?</Text>
           <TouchableOpacity
             className={`border border-white/10 rounded-[10px] h-11 items-center justify-center px-4 ${resending ? 'opacity-60' : ''}`}
             onPress={handleResend}
@@ -238,12 +238,12 @@ export default function Login() {
             {resending ? (
               <Loader size={24} color="#a1a1aa" />
             ) : (
-              <Text className="text-white/80 text-[13px] font-medium">Renvoyer l'email</Text>
+              <Text className="text-white/80 text-[13px] font-medium font-dmsans">Renvoyer l'email</Text>
             )}
           </TouchableOpacity>
         </View>
         <TouchableOpacity onPress={() => { setEmailSent(false); setFlow('signin'); }}>
-          <Text className="text-[13px] text-white/50 mt-4">Retour à la connexion</Text>
+          <Text className="text-[13px] text-white/50 mt-4 font-dmsans">Retour à la connexion</Text>
         </TouchableOpacity>
       </View>
     );
@@ -256,14 +256,14 @@ export default function Login() {
         <View className="w-16 h-16 rounded-full items-center justify-center mb-4 bg-emerald-500/15 border border-emerald-500/30">
           <Icon name="mail-send-line" size={28} color="#34d399" />
         </View>
-        <Text className="text-xl font-bold text-white mb-2.5 text-center">Email envoyé !</Text>
-        <Text className="text-sm text-white/50 text-center leading-[22px] mb-6">
+        <Text className="text-xl font-bold text-white mb-2.5 text-center font-righteous">Email envoyé !</Text>
+        <Text className="text-sm text-white/50 text-center leading-[22px] mb-6 font-dmsans">
           Un lien de réinitialisation a été envoyé à{' '}
-          <Text className="text-white font-semibold">{email}</Text>.
+          <Text className="text-white font-semibold font-dmsans">{email}</Text>.
           {'\n'}Le lien expire dans 24 heures.
         </Text>
         <TouchableOpacity onPress={() => { setResetSent(false); setFlow('signin'); }}>
-          <Text className="text-[13px] text-white/50 mt-4">← Retour à la connexion</Text>
+          <Text className="text-[13px] font-dmsans-medium text-white/50 mt-4">← Retour à la connexion</Text>
         </TouchableOpacity>
       </View>
     );
@@ -292,8 +292,8 @@ export default function Login() {
       >
         {/* Logo */}
         <View className="items-center mb-7">
-          <Text className="text-2xl font-bold text-white mb-1">{titles[flow]}</Text>
-          <Text className="text-[13px] text-white/50 text-center">{subtitles[flow]}</Text>
+          <Text className="text-2xl font-bold text-white mb-1 font-righteous">{titles[flow]}</Text>
+          <Text className="text-[13px] text-white/50 text-center font-dmsans">{subtitles[flow]}</Text>
         </View>
 
         {/* Card */}
@@ -302,7 +302,7 @@ export default function Login() {
           {successMsg && (
             <View className="flex-row items-start gap-2.5 rounded-[10px] px-[14px] py-3 bg-emerald-500/10 border border-emerald-500/20">
               <Icon name="checkbox-circle-line" size={16} color="#34d399" />
-              <Text className="text-emerald-400 text-[13px] flex-1 leading-[18px]">{successMsg}</Text>
+              <Text className="text-emerald-400 text-[13px] flex-1 leading-[18px] font-dmsans">{successMsg}</Text>
             </View>
           )}
 
@@ -310,7 +310,7 @@ export default function Login() {
           {flow === 'forgot' && (
             <TouchableOpacity className="flex-row items-center gap-1.5" onPress={() => setFlow('signin')} activeOpacity={0.7}>
               <Icon name="arrow-left-line" size={14} color="#71717a" />
-              <Text className="text-xs text-white/50">Retour à la connexion</Text>
+              <Text className="text-xs text-white/50 font-dmsans">Retour à la connexion</Text>
             </TouchableOpacity>
           )}
 
@@ -346,7 +346,7 @@ export default function Login() {
               {flow === 'signup' && <PasswordStrength password={password} />}
               {flow === 'signin' && (
                 <TouchableOpacity onPress={() => setFlow('forgot')} activeOpacity={0.7} className="mt-2">
-                  <Text className="text-xs text-white/50 text-right">Mot de passe oublié ?</Text>
+                  <Text className="text-xs text-white/50 text-right font-dmsans">Mot de passe oublié ?</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -356,7 +356,7 @@ export default function Login() {
           {error && (
             <View className="flex-row items-start gap-2.5 rounded-[10px] px-[14px] py-3 bg-red-500/10 border border-red-500/20">
               <Icon name={'alert-fill'} size={16} color="#f87171" />
-              <Text className="text-red-400 text-[13px] flex-1 leading-[18px]">{error}</Text>
+              <Text className="text-red-400 text-[13px] flex-1 leading-[18px] font-dmsans">{error}</Text>
             </View>
           )}
 
@@ -381,8 +381,8 @@ export default function Login() {
                   <Loader size={24} color="#a1a1aa" />
                 ) : (
                   <>
-                    <Text style={{ fontSize: 16, fontWeight: '700', color: '#fff' }}>G</Text>
-                    <Text className="text-white/80 text-[15px] font-medium">Continuer avec Google</Text>
+                    <Icon name="google-fill" size={18} color="#fff" />
+                    <Text className="text-white/80 text-[15px] font-medium font-dmsans">Continuer avec Google</Text>
                   </>
                 )}
               </TouchableOpacity>
@@ -399,7 +399,7 @@ export default function Login() {
                   ) : (
                     <>
                       <Icon name="apple-fill" size={18} color="#fff" />
-                      <Text className="text-white/80 text-[15px] font-medium">Continuer avec Apple</Text>
+                      <Text className="text-white/80 text-[15px] font-medium font-dmsans">Continuer avec Apple</Text>
                     </>
                   )}
                 </TouchableOpacity>
@@ -413,22 +413,22 @@ export default function Login() {
               <>
                 <View className="flex-row items-center gap-2.5">
                   <View className="flex-1 h-px bg-white/10" />
-                  <Text className="text-white/30 text-xs">ou</Text>
+                  <Text className="text-white/30 text-xs font-dmsans">ou</Text>
                   <View className="flex-1 h-px bg-white/10" />
                 </View>
                 <TouchableOpacity onPress={() => setFlow('signup')} activeOpacity={0.7}>
-                  <Text className="text-white/50 text-[13px] text-center">
+                  <Text className="text-white/50 text-[13px] text-center font-dmsans">
                     Pas encore de compte ?{' '}
-                    <Text className="text-blue-400 font-semibold">S'inscrire</Text>
+                    <Text className="text-blue-400 font-dmsans-semibold">S'inscrire</Text>
                   </Text>
                 </TouchableOpacity>
               </>
             )}
             {flow === 'signup' && (
               <TouchableOpacity onPress={() => setFlow('signin')} activeOpacity={0.7}>
-                <Text className="text-white/50 text-[13px] text-center">
+                <Text className="text-white/50 text-[13px] text-center font-dmsans">
                   Déjà un compte ?{' '}
-                  <Text className="text-blue-400 font-semibold">Se connecter</Text>
+                  <Text className="text-blue-400 font-dmsans-semibold">Se connecter</Text>
                 </Text>
               </TouchableOpacity>
             )}
@@ -436,7 +436,7 @@ export default function Login() {
         </View>
 
         {/* legal */}
-        <Text className="text-center text-[11px] text-white/30 mt-4">
+        <Text className="text-center text-[11px] text-white/30 mt-4 font-dmsans">
           En continuant, vous acceptez nos conditions d'utilisation.
         </Text>
       </ScrollView>

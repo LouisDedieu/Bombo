@@ -474,12 +474,12 @@ export default function CityDetailPage() {
         resizeMode="cover"
       >
         <View className="flex-1 items-center justify-center px-4" style={{ paddingTop: insets.top }}>
-          <Text className="text-zinc-400 text-sm mb-4">{error || 'Ville introuvable.'}</Text>
+          <Text className="text-zinc-400 text-sm mb-4 font-dmsans">{error || 'Ville introuvable.'}</Text>
           <TouchableOpacity
             onPress={() => router.back()}
             className="bg-zinc-800 px-6 py-3 rounded-lg"
           >
-            <Text className="text-white font-medium">Retour</Text>
+            <Text className="text-white font-medium font-dmsans">Retour</Text>
           </TouchableOpacity>
         </View>
       </ImageBackground>
@@ -584,7 +584,7 @@ export default function CityDetailPage() {
                   paddingVertical: 6,
                 }}
               >
-                <Text style={{ color: '#fbbf24', fontSize: 10 }}>
+                <Text className="font-dmsans" style={{ color: '#fbbf24', fontSize: 10 }}>
                   ⚠️ {approximateCount} approx.
                 </Text>
               </View>
@@ -794,7 +794,7 @@ export default function CityDetailPage() {
                 {filteredHighlights.length === 0 && (
                   <View className="items-center py-14">
                     <Icon name={"information-2-fill"} size={32} color="#a1a1aa" style={{ opacity: 1 }} />
-                    <Text className="text-sm text-zinc-400 mt-2">Aucun point trouvé.</Text>
+                    <Text className="text-sm text-zinc-400 mt-2 font-dmsans">Aucun point trouvé.</Text>
                   </View>
                 )}
               </View>
@@ -822,7 +822,7 @@ export default function CityDetailPage() {
               ) : (
                 <View className="items-center py-14">
                   <Icon name={"information-2-fill"} size={32} color="#a1a1aa" style={{ opacity: 1 }} />
-                  <Text className="text-sm text-zinc-400 mt-2">Aucune information budget disponible.</Text>
+                  <Text className="text-sm text-zinc-400 mt-2 font-dmsans">Aucune information budget disponible.</Text>
                 </View>
               )}
             </View>
@@ -836,7 +836,7 @@ export default function CityDetailPage() {
               ) : (
                 <View className="items-center py-14">
                   <Icon name={"information-2-fill"} size={32} color="#a1a1aa" style={{ opacity: 1 }} />
-                  <Text className="text-sm text-zinc-400 mt-2">Aucune information pratique disponible.</Text>
+                  <Text className="text-sm text-zinc-400 mt-2 font-dmsans">Aucune information pratique disponible.</Text>
                 </View>
               )}
             </View>

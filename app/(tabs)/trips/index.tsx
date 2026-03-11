@@ -207,7 +207,7 @@ export default function SavedPage() {
           className="flex-1 items-center justify-center"
           style={{ paddingTop: insets.top }}
         >
-          <Text className="text-sm text-error">Erreur : {error}</Text>
+          <Text className="text-sm text-error font-dmsans">Erreur : {error}</Text>
         </View>
       </ImageBackground>
     );
@@ -225,7 +225,7 @@ export default function SavedPage() {
           className="flex-1 items-center justify-center"
           style={{ paddingTop: insets.top }}
         >
-          <Text className="text-text-secondary">Connectez-vous pour voir vos sauvegardes.</Text>
+          <Text className="text-text-secondary font-dmsans">Connectez-vous pour voir vos sauvegardes.</Text>
         </View>
       </ImageBackground>
     );

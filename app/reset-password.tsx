@@ -75,8 +75,8 @@ function SuccessScreen() {
         </View>
 
         <View className="items-center gap-1">
-          <Text className="text-xl font-bold text-white">Mot de passe mis à jour !</Text>
-          <Text className="text-sm text-white/50">Redirection en cours…</Text>
+          <Text className="text-xl font-bold text-white font-righteous">Mot de passe mis à jour !</Text>
+          <Text className="text-sm text-white/50 font-dmsans">Redirection en cours…</Text>
         </View>
       </Animated.View>
     </View>
@@ -161,8 +161,8 @@ export default function ResetPassword() {
               >
                 <Icon name="shield-check-fill" size={24} color="#ffffff" />
               </View>
-              <Text className="text-2xl font-bold text-white">Nouveau mot de passe</Text>
-              <Text className="text-sm text-white/50 mt-1">Choisissez un mot de passe sécurisé.</Text>
+              <Text className="text-2xl font-bold text-white font-righteous">Nouveau mot de passe</Text>
+              <Text className="text-sm text-white/50 mt-1 font-dmsans">Choisissez un mot de passe sécurisé.</Text>
             </View>
 
             {/* ── Card ── */}
@@ -177,7 +177,7 @@ export default function ResetPassword() {
 
               {/* Password field */}
               <View className="gap-1.5">
-                <Text className="text-xs font-medium text-white/60 uppercase tracking-wide">
+                <Text className="text-xs font-medium text-white/60 uppercase tracking-wide font-dmsans">
                   Nouveau mot de passe
                 </Text>
                 <View className="relative">
@@ -215,7 +215,7 @@ export default function ResetPassword() {
 
               {/* Confirm field */}
               <View className="gap-1.5">
-                <Text className="text-xs font-medium text-white/60 uppercase tracking-wide">
+                <Text className="text-xs font-medium text-white/60 uppercase tracking-wide font-dmsans">
                   Confirmer le mot de passe
                 </Text>
                 <TextInput
@@ -239,7 +239,7 @@ export default function ResetPassword() {
                   }}
                 />
                 {confirmHasError && (
-                  <Text className="text-xs text-red-400">
+                  <Text className="text-xs text-red-400 font-dmsans">
                     Les mots de passe ne correspondent pas.
                   </Text>
                 )}
@@ -256,7 +256,7 @@ export default function ResetPassword() {
                   }}
                 >
                   <Icon name="error-warning-line" size={16} color="#f87171" />
-                  <Text className="text-sm text-red-400 flex-1">{error}</Text>
+                  <Text className="text-sm text-red-400 flex-1 font-dmsans">{error}</Text>
                 </View>
               )}
 

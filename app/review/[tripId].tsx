@@ -119,12 +119,12 @@ function SpotReviewCard({ spot, onUpdate, onDelete }: SpotReviewCardProps) {
     return (
       <View className="rounded-lg p-2.5" style={{ backgroundColor: cardBg, borderWidth: 1, borderColor: cardBorder }}>
         <View className="flex-row items-start gap-2">
-          <Text style={{ fontSize: 16 }}>{TYPE_EMOJI[spot.spot_type ?? ''] ?? '📍'}</Text>
+          <Text className="font-dmsans" style={{ fontSize: 16 }}>{TYPE_EMOJI[spot.spot_type ?? ''] ?? '📍'}</Text>
           <View className="flex-1 min-w-0">
             {/* Nom + actions */}
             <View className="flex-row items-center justify-between gap-1">
               <View className="flex-row items-center gap-1 flex-1 min-w-0">
-                <Text className="text-white font-medium flex-shrink-1" numberOfLines={1}>{spot.name}</Text>
+                <Text className="text-white font-dmsans-semibold text-sm flex-shrink-1" numberOfLines={1}>{spot.name}</Text>
                 {spot.highlight && <Icon name={'star-fill'} size={12} color="#facc15" fill="#facc15" />}
               </View>
               <View className="flex-row items-center gap-1 flex-shrink-0">
@@ -160,25 +160,25 @@ function SpotReviewCard({ spot, onUpdate, onDelete }: SpotReviewCardProps) {
             </View>
 
             {spot.address && (
-              <Text className="text-xs text-white/50 mt-0.5" numberOfLines={1}>{spot.address}</Text>
+              <Text className="text-xs text-white/50 mt-0.5 font-dmsans" numberOfLines={1}>{spot.address}</Text>
             )}
 
             <View className="flex-row items-center gap-2 mt-1 flex-wrap">
               {!!spot.duration_minutes && (
                 <View className="flex-row items-center gap-0.5">
                   <Icon name={'time-line'} size={12} color="rgba(255,255,255,0.5)" />
-                  <Text className="text-xs text-white/50">{spot.duration_minutes}min</Text>
+                  <Text className="text-xs text-white/50 font-dmsans">{spot.duration_minutes}min</Text>
                 </View>
               )}
               {spot.price_range && (
-                <Text className="text-xs text-green-400">
+                <Text className="text-xs text-green-400 font-dmsans">
                   {PRICE_LABEL[spot.price_range] ?? spot.price_range}
                 </Text>
               )}
             </View>
 
             {spot.tips && (
-              <Text className="text-xs text-blue-300 italic mt-1">💡 {spot.tips}</Text>
+              <Text className="text-xs text-blue-300 italic mt-1 font-dmsans">💡 {spot.tips}</Text>
             )}
           </View>
         </View>
@@ -192,7 +192,7 @@ function SpotReviewCard({ spot, onUpdate, onDelete }: SpotReviewCardProps) {
 
       {/* Nom */}
       <View>
-        <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Nom</Text>
+        <Text className="text-[10px] text-white/50 uppercase tracking-widest font-dmsans" style={{ fontSize: 10 }}>Nom</Text>
         <TextInput
           value={form.name ?? ''}
           onChangeText={(v) => setForm((f) => ({ ...f, name: v }))}
@@ -205,7 +205,7 @@ function SpotReviewCard({ spot, onUpdate, onDelete }: SpotReviewCardProps) {
       {/* Type + Prix */}
       <View className="flex-row gap-2">
         <View className="flex-1">
-          <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Type</Text>
+          <Text className="text-[10px] text-white/50 uppercase tracking-widest font-dmsans" style={{ fontSize: 10 }}>Type</Text>
           {/* Picker simplifié — ScrollView horizontal des options */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-0.5" contentContainerStyle={{ gap: 4 }}>
             {SPOT_TYPES.map((t) => (
@@ -225,7 +225,7 @@ function SpotReviewCard({ spot, onUpdate, onDelete }: SpotReviewCardProps) {
 
       {/* Prix */}
       <View>
-        <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Prix</Text>
+        <Text className="text-[10px] text-white/50 uppercase tracking-widest font-dmsans" style={{ fontSize: 10 }}>Prix</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-0.5" contentContainerStyle={{ gap: 4 }}>
           {PRICE_OPTIONS.map((p) => (
             <SecondaryButton
@@ -242,7 +242,7 @@ function SpotReviewCard({ spot, onUpdate, onDelete }: SpotReviewCardProps) {
 
       {/* Adresse */}
       <View>
-        <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Adresse</Text>
+        <Text className="text-[10px] text-white/50 uppercase tracking-widest font-dmsans" style={{ fontSize: 10 }}>Adresse</Text>
         <TextInput
           value={form.address ?? ''}
           onChangeText={(v) => setForm((f) => ({ ...f, address: v || null }))}
@@ -255,7 +255,7 @@ function SpotReviewCard({ spot, onUpdate, onDelete }: SpotReviewCardProps) {
 
       {/* Durée */}
       <View>
-        <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Durée (min)</Text>
+        <Text className="text-[10px] text-white/50 uppercase tracking-widest font-dmsans" style={{ fontSize: 10 }}>Durée (min)</Text>
         <TextInput
           value={form.duration_minutes != null ? String(form.duration_minutes) : ''}
           onChangeText={(v) => setForm((f) => ({ ...f, duration_minutes: v ? Number(v) : null }))}
@@ -269,7 +269,7 @@ function SpotReviewCard({ spot, onUpdate, onDelete }: SpotReviewCardProps) {
 
       {/* Conseil */}
       <View>
-        <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Conseil</Text>
+        <Text className="text-[10px] text-white/50 uppercase tracking-widest font-dmsans" style={{ fontSize: 10 }}>Conseil</Text>
         <TextInput
           value={form.tips ?? ''}
           onChangeText={(v) => setForm((f) => ({ ...f, tips: v || null }))}
@@ -373,7 +373,7 @@ function DayReviewCard({ day, isExpanded, onToggle, onValidatedChange, onSpotUpd
               className="w-8 h-8 rounded-full items-center justify-center flex-shrink-0"
               style={{ backgroundColor: numBg, borderWidth: 1, borderColor: numBorder }}
             >
-              <Text style={{ fontSize: 14, fontWeight: '700', color: numColor }}>{day.day_number}</Text>
+              <Text className="font-righteous" style={{ fontSize: 14, fontWeight: '700', color: numColor }}>{day.day_number}</Text>
             </View>
 
             {/* Localisation — cliquable pour déplier si inclus */}
@@ -383,7 +383,7 @@ function DayReviewCard({ day, isExpanded, onToggle, onValidatedChange, onSpotUpd
               className="flex-1 min-w-0"
             >
               <Text
-                className="text-sm font-medium"
+                className="font-righteous text-sm"
                 numberOfLines={1}
                 style={{
                   color: included ? '#FAFAFF' : 'rgba(255,255,255,0.3)',
@@ -393,7 +393,7 @@ function DayReviewCard({ day, isExpanded, onToggle, onValidatedChange, onSpotUpd
                 {day.location ?? `Jour ${day.day_number}`}
               </Text>
               {included && day.spots.length > 0 && (
-                <Text className="text-xs text-white/70 mt-0.5">
+                <Text className="text-xs text-white/70 mt-0.5 font-dmsans">
                   {day.spots.length} lieu{day.spots.length > 1 ? 'x' : ''}
                 </Text>
               )}
@@ -430,7 +430,7 @@ function DayReviewCard({ day, isExpanded, onToggle, onValidatedChange, onSpotUpd
                 style={{ borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)' }}
               >
                 {day.spots.length === 0 ? (
-                  <Text className="text-xs text-white/70 text-center py-2 italic">
+                  <Text className="text-xs text-white/70 text-center py-2 italic font-dmsans">
                     Aucun lieu pour ce jour.
                   </Text>
                 ) : (
@@ -447,16 +447,16 @@ function DayReviewCard({ day, isExpanded, onToggle, onValidatedChange, onSpotUpd
                 {/* Repas — web: breakfast/lunch/dinner */}
                 {(day.breakfast_spot || day.lunch_spot || day.dinner_spot) && (
                   <View className="pt-2 gap-1" style={{ borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)' }}>
-                    {day.breakfast_spot && <Text className="text-xs text-white/60">🌅 {day.breakfast_spot}</Text>}
-                    {day.lunch_spot     && <Text className="text-xs text-white/60">☀️ {day.lunch_spot}</Text>}
-                    {day.dinner_spot    && <Text className="text-xs text-white/60">🌙 {day.dinner_spot}</Text>}
+                    {day.breakfast_spot && <Text className="text-xs text-white/60 font-dmsans">🌅 {day.breakfast_spot}</Text>}
+                    {day.lunch_spot     && <Text className="text-xs text-white/60 font-dmsans">☀️ {day.lunch_spot}</Text>}
+                    {day.dinner_spot    && <Text className="text-xs text-white/60 font-dmsans">🌙 {day.dinner_spot}</Text>}
                   </View>
                 )}
 
                 {/* Hébergement */}
                 {day.accommodation_name && (
                   <Text
-                    className="text-xs text-white/50 pt-2"
+                    className="text-xs text-white/50 pt-2 font-dmsans"
                     style={{ borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)' }}
                   >
                     🏨 {day.accommodation_name}
@@ -611,7 +611,7 @@ export default function ReviewModePage() {
   if (!trip) {
     return (
       <View className="flex-1 items-center justify-center gap-4">
-        <Text className="text-white/60">Voyage introuvable</Text>
+        <Text className="text-white/60 font-dmsans">Voyage introuvable</Text>
         <Button onPress={() => router.back()}>Retour</Button>
       </View>
     );
@@ -643,10 +643,10 @@ export default function ReviewModePage() {
             </View>
           </Pressable>
           <View className="flex-1 min-w-0">
-            <Text className="text-lg font-bold text-white" numberOfLines={1}>{trip.trip_title}</Text>
+            <Text className="text-lg font-bold text-white font-righteous" numberOfLines={1}>{trip.trip_title}</Text>
             <View className="flex-row items-center gap-1 mt-0.5">
               <Icon name={'map-pin-2-line'} size={12} color="#71717a" />
-              <Text className="text-sm text-white/60">
+              <Text className="text-sm text-white/60 font-dmsans">
                 {trip.destination} · {trip.duration_days} jours
               </Text>
             </View>
@@ -667,31 +667,31 @@ export default function ReviewModePage() {
             {trip.vibe && (
               <View
                 className="px-2 py-0.5 rounded-full"
-                style={{ backgroundColor: '#a855f733', borderWidth: 1, borderColor: '#a855f74D' }}
+                style={{ backgroundColor: 'rgba(168,85,247,0.2)', borderWidth: 1, borderColor: 'rgba(168,85,247,0.3)' }}
               >
-                <Text style={{ fontSize: 12, color: '#d8b4fe' }}>{trip.vibe}</Text>
+                <Text className="font-dmsans" style={{ fontSize: 12, color: '#d8b4fe' }}>{trip.vibe}</Text>
               </View>
             )}
             <View
               className="px-2 py-0.5 rounded-full"
-              style={{ backgroundColor: '#27272a', borderWidth: 1, borderColor: '#3f3f46' }}
+              style={{ backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}
             >
-              <Text style={{ fontSize: 12, color: '#d4d4d8' }}>{trip.duration_days} jours</Text>
+              <Text className="font-dmsans" style={{ fontSize: 12, color: '#d4d4d8' }}>{trip.duration_days} jours</Text>
             </View>
             {isSaved && (
               <View
                 className="px-2 py-0.5 rounded-full"
-                style={{ backgroundColor: '#22c55e33', borderWidth: 1, borderColor: '#22c55e4D' }}
+                style={{ backgroundColor: 'rgba(34,197,94,0.2)', borderWidth: 1, borderColor: 'rgba(34,197,94,0.3)' }}
               >
-                <Text style={{ fontSize: 12, color: '#86efac' }}>✓ Déjà sauvegardé</Text>
+                <Text className="font-dmsans" style={{ fontSize: 12, color: '#86efac' }}>✓ Déjà sauvegardé</Text>
               </View>
             )}
           </View>
 
           {/* Créateur */}
           {trip.content_creator_handle && (
-            <Text className="text-xs text-white/50">
-              📹 Créateur : <Text className="text-white/60">@{trip.content_creator_handle}</Text>
+            <Text className="text-xs text-white/50 font-dmsans">
+              📹 Créateur : <Text className="text-white/60 font-dmsans">@{trip.content_creator_handle}</Text>
             </Text>
           )}
 
@@ -701,7 +701,7 @@ export default function ReviewModePage() {
               onPress={() => Linking.openURL(trip.source_url)}
               className="flex-row items-center gap-1"
             >
-              <Text className="text-xs text-blue-400">Voir la vidéo originale</Text>
+              <Text className="text-xs text-blue-400 font-dmsans">Voir la vidéo originale</Text>
               <Icon name={'external-link-line'} size={12} color="#60a5fa" />
             </TouchableOpacity>
           )}
@@ -715,8 +715,8 @@ export default function ReviewModePage() {
           {/* Titre + bulk actions */}
           <View className="flex-row items-start justify-between gap-3 mb-3">
             <View>
-              <Text className="text-sm font-semibold text-white">Sélectionne tes jours</Text>
-              <Text className="text-xs text-white/50 mt-0.5">
+              <Text className=" text-white font-righteous">Sélectionne tes jours</Text>
+              <Text className="text-xs text-white/50 mt-0.5 font-dmsans">
                 {validatedCount === 0
                   ? 'Aucun jour sélectionné'
                   : `${validatedCount} jour${validatedCount > 1 ? 's' : ''} · ${totalSpots} lieu${totalSpots > 1 ? 'x' : ''}`}
@@ -734,7 +734,7 @@ export default function ReviewModePage() {
                 }}
               >
                 <Icon name={'add-fill'} size={12} color="#a855f7" />
-                <Text style={{ fontSize: 12, color: '#a855f7' }}>Ville</Text>
+                <Text className="font-dmsans-semibold" style={{ fontSize: 12, color: '#a855f7' }}>Ville</Text>
               </TouchableOpacity>
               {(['Tout', 'Aucun'] as const).map((label) => {
                 const isAll = label === 'Tout';
@@ -752,7 +752,7 @@ export default function ReviewModePage() {
                       opacity: disabled ? 0.3 : 1,
                     }}
                   >
-                    <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>{label}</Text>
+                    <Text className="font-dmsans-semibold" style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>{label}</Text>
                   </TouchableOpacity>
                 );
               })}

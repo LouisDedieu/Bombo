@@ -82,10 +82,10 @@ function StatCard({
       >
         <Icon name={icon as any} size={16} color="#FAFAFF" />
       </View>
-      <Text style={{ fontSize: 24, fontFamily: 'Righteous', fontWeight: 'bold', color: '#FAFAFF' }}>
+      <Text className="font-righteous" style={{ fontSize: 24, fontWeight: 'bold', color: '#FAFAFF' }}>
         {value}
       </Text>
-      <Text style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.5)', textAlign: 'center' }}>
+      <Text className="font-dmsans" style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.5)', textAlign: 'center' }}>
         {label}
       </Text>
     </View>
@@ -187,7 +187,7 @@ export default function ProfilePage() {
                 }}
               >
                 {user?.email ? (
-                  <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>
+                  <Text className="font-righteous" style={{ fontSize: 24, fontWeight: 'bold', color: '#FAFAFF' }}>
                     {initials(user.email)}
                   </Text>
                 ) : (
@@ -220,7 +220,7 @@ export default function ProfilePage() {
                     }}
                   >
                     <Icon name="check-line" size={10} color="#34d399" />
-                    <Text style={{ color: '#34d399', fontSize: 10, fontWeight: '500' }}>Vérifié</Text>
+                    <Text className="font-dmsans" style={{ color: '#34d399', fontSize: 10, fontWeight: '500' }}>Vérifié</Text>
                   </View>
                 ) : (
                   <View
@@ -233,7 +233,7 @@ export default function ProfilePage() {
                       paddingVertical: 2,
                     }}
                   >
-                    <Text style={{ color: '#fbbf24', fontSize: 10, fontWeight: '500' }}>
+                    <Text className="font-dmsans" style={{ color: '#fbbf24', fontSize: 10, fontWeight: '500' }}>
                       En attente de confirmation
                     </Text>
                   </View>
@@ -251,26 +251,26 @@ export default function ProfilePage() {
                       paddingVertical: 2,
                     }}
                   >
-                    <Text style={{ color: '#a855f7', fontSize: 10, fontWeight: '500' }}>Test</Text>
+                    <Text className="font-dmsans" style={{ color: '#a855f7', fontSize: 10, fontWeight: '500' }}>Test</Text>
                   </View>
                 )}
               </View>
 
               {/* Username */}
               {profile?.username && (
-                <Text style={{ fontSize: 13, color: 'rgba(255, 255, 255, 0.5)', marginTop: 2 }}>
+                <Text className="font-dmsans" style={{ fontSize: 13, color: 'rgba(255, 255, 255, 0.5)', marginTop: 2 }}>
                   @{profile.username}
                 </Text>
               )}
 
               {/* Email */}
-              <Text style={{ fontSize: 12, color: 'rgba(255, 255, 255, 0.4)', marginTop: 2 }}>
+              <Text className="font-dmsans" style={{ fontSize: 12, color: 'rgba(255, 255, 255, 0.4)', marginTop: 2 }}>
                 {user?.email}
               </Text>
 
               {/* Bio */}
               {profile?.bio && (
-                <Text style={{ fontSize: 13, color: 'rgba(255, 255, 255, 0.6)', marginTop: 8, lineHeight: 20 }}>
+                <Text className="font-dmsans" style={{ fontSize: 13, color: 'rgba(255, 255, 255, 0.6)', marginTop: 8, lineHeight: 20 }}>
                   {profile.bio}
                 </Text>
               )}
@@ -279,7 +279,7 @@ export default function ProfilePage() {
               {profile?.created_at && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8 }}>
                   <Icon name="time-line" size={12} color="rgba(255, 255, 255, 0.4)" />
-                  <Text style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.4)' }}>
+                  <Text className="font-dmsans" style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.4)' }}>
                     Membre depuis {formatDate(profile.created_at)}
                   </Text>
                 </View>
@@ -363,7 +363,7 @@ export default function ProfilePage() {
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <Icon name="bookmark-line" size={16} color="rgba(255, 255, 255, 0.5)" />
-              <Text style={{ fontSize: 14, color: '#FAFAFF' }}>Mes voyages sauvegardés</Text>
+              <Text className="font-dmsans" style={{ fontSize: 14, color: '#FAFAFF' }}>Mes voyages sauvegardés</Text>
             </View>
             <Icon name="arrow-right-s-line" size={16} color="rgba(255, 255, 255, 0.3)" />
           </TouchableOpacity>
@@ -382,7 +382,7 @@ export default function ProfilePage() {
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <Icon name="movie-line" size={16} color="rgba(255, 255, 255, 0.5)" />
-              <Text style={{ fontSize: 14, color: '#FAFAFF' }}>Analyser une nouvelle vidéo</Text>
+              <Text className="font-dmsans" style={{ fontSize: 14, color: '#FAFAFF' }}>Analyser une nouvelle vidéo</Text>
             </View>
             <Icon name="arrow-right-s-line" size={16} color="rgba(255, 255, 255, 0.3)" />
           </TouchableOpacity>
@@ -410,18 +410,18 @@ export default function ProfilePage() {
             {signing ? (
               <>
                 <Loader size={20} color="rgba(255, 255, 255, 0.5)" />
-                <Text style={{ color: 'rgba(255, 255, 255, 0.5)', fontWeight: '500' }}>Déconnexion…</Text>
+                <Text className="font-dmsans" style={{ color: 'rgba(255, 255, 255, 0.5)', fontWeight: '500' }}>Déconnexion…</Text>
               </>
             ) : (
               <>
                 <Icon name="logout-box-line" size={16} color="rgba(255, 255, 255, 0.5)" />
-                <Text style={{ color: 'rgba(255, 255, 255, 0.5)', fontWeight: '500' }}>Se déconnecter</Text>
+                <Text className="font-dmsans" style={{ color: 'rgba(255, 255, 255, 0.5)', fontWeight: '500' }}>Se déconnecter</Text>
               </>
             )}
           </TouchableOpacity>
 
           {isTestMode && (
-            <Text style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.4)', textAlign: 'center', marginTop: 8 }}>
+            <Text className="font-dmsans" style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.4)', textAlign: 'center', marginTop: 8 }}>
               Déconnexion désactivée en mode test
             </Text>
           )}
