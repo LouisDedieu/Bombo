@@ -5,25 +5,23 @@ const { withStorybook } = require("@storybook/react-native/metro/withStorybook")
 
 const config = getDefaultConfig(__dirname);
 
-// Add SVG transformer support
 config.transformer = {
-  ...config.transformer,
-  babelTransformerPath: require.resolve("react-native-svg-transformer/expo"),
+    ...config.transformer,
+    babelTransformerPath: require.resolve("react-native-svg-transformer/expo"),
 };
 config.resolver = {
-  ...config.resolver,
-  assetExts: config.resolver.assetExts.filter((ext) => ext !== "svg"),
-  sourceExts: [...config.resolver.sourceExts, "svg"],
+    ...config.resolver,
+    assetExts: config.resolver.assetExts.filter((ext) => ext !== "svg"),
+    sourceExts: [...config.resolver.sourceExts, "svg"],
 };
 
-const nativeWindConfig = withNativeWind(config, {
-  input: "./styles/global.css",
+const shareExtensionConfig = withShareExtension(config, { isCSSEnabled: true });
+
+const nativeWindConfig = withNativeWind(shareExtensionConfig, {
+    input: "./styles/global.css",
 });
 
-const shareExtensionConfig = withShareExtension(nativeWindConfig);
-
-// Enable Storybook only when STORYBOOK env var is set
-module.exports = withStorybook(shareExtensionConfig, {
-  enabled: process.env.STORYBOOK === "true",
-  configPath: "./.rnstorybook",
+module.exports = withStorybook(nativeWindConfig, {
+    enabled: process.env.STORYBOOK === "true",
+    configPath: "./.rnstorybook",
 });

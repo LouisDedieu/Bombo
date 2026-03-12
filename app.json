@@ -38,20 +38,6 @@
       "expo-router",
       "expo-apple-authentication",
       "expo-font",
-      "expo-image",
-      "expo-web-browser",
-      [
-        "expo-splash-screen",
-        {
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 200,
-          "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
-          "dark": {
-            "backgroundColor": "#000000"
-          }
-        }
-      ],
       "expo-secure-store",
       [
         "expo-share-extension",

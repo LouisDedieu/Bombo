@@ -44,37 +44,6 @@ export interface TabBarProps {
   style?: StyleProp<ViewStyle>;
 }
 
-// ---------------------------------------------------------------------------
-// CrossIcon
-// ---------------------------------------------------------------------------
-
-function CrossIcon({ size, color }: { size: number; color: string }) {
-  const thickness = Math.round(size * 0.083);
-  const length = Math.round(size * 0.75);
-
-  return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <View
-        style={{
-          position: 'absolute',
-          width: length,
-          height: thickness,
-          backgroundColor: color,
-          borderRadius: thickness / 2,
-        }}
-      />
-      <View
-        style={{
-          position: 'absolute',
-          width: thickness,
-          height: length,
-          backgroundColor: color,
-          borderRadius: thickness / 2,
-        }}
-      />
-    </View>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // TabBar
