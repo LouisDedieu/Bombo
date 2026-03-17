@@ -74,7 +74,8 @@
       "router": {},
       "eas": {
         "projectId": "ebc80394-a117-41fc-9804-829716ebe1e8"
-      }
+      },
+      "POSTHOG_API_KEY": "EXPO_PUBLIC_POSTHOG_API_KEY"
     }
   }
 }

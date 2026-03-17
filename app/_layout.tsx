@@ -21,6 +21,8 @@ import {
 } from '@expo-google-fonts/dm-sans';
 import * as SplashScreen from 'expo-splash-screen';
 import {AnalysisProvider} from "@/context/AnalysisContext";
+import { initPostHog } from '@/lib/posthog';
+import { useUTMTracking } from '@/hooks/useUTMTracking';
 
 // Keep splash screen visible while loading fonts
 SplashScreen.preventAutoHideAsync();
@@ -102,6 +104,14 @@ export default function RootLayout() {
 
   // Handle Android share intent
   useAndroidShareHandler();
+
+  // Track UTM parameters from deep links
+  useUTMTracking();
+
+  // Initialize PostHog analytics
+  useEffect(() => {
+    initPostHog();
+  }, []);
 
   // Don't render until fonts are loaded
   if (!fontsLoaded) {
