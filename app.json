@@ -7,6 +7,10 @@
     "icon": "./assets/images/icon.png",
     "scheme": "oneday",
     "userInterfaceStyle": "automatic",
+    "splash": {
+      "backgroundColor": "#1a1744",
+      "resizeMode": "contain"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.onedaytravel.mobile",

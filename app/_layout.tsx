@@ -28,30 +28,45 @@ import { initI18n } from '../src/i18n/index';
 
 SplashScreen.preventAutoHideAsync();
 
-function AuthGate({ onRetry }: { onRetry: () => void }) {
+function AuthGate({ onRetry, onReady }: { onRetry: () => void; onReady: () => void }) {
   const { group, isPasswordRecovery } = useAuthGuardState();
   const router = useRouter();
   const segments = useSegments();
 
+  const currentSegment = segments[0];
+  const onAuthRoute = currentSegment === 'login' || currentSegment === 'reset-password';
+  const onProtectedRoute = currentSegment === '(tabs)' || currentSegment === 'review';
+
+  // Determine if we need to redirect (user is on wrong route for their auth state)
+  const needsRedirectToLogin = group === 'auth' && !onAuthRoute;
+  const needsRedirectToResetPassword = group === 'main' && isPasswordRecovery && currentSegment !== 'reset-password';
+  const needsRedirectToHome = group === 'main' && !onProtectedRoute && !isPasswordRecovery;
+  const isRedirecting = needsRedirectToLogin || needsRedirectToResetPassword || needsRedirectToHome;
+
+  // Hide splash screen only when auth is determined AND we're on the correct route
+  useEffect(() => {
+    if (group !== 'loading' && !isRedirecting) {
+      onReady();
+    }
+  }, [group, isRedirecting, onReady]);
+
+  // Handle navigation redirects
   useEffect(() => {
     if (group === 'loading') return;
+    if (group === 'network_error') return;
+    if (group === 'email_pending') return;
 
-    const inTabs = segments[0] === '(tabs)';
-    const inReview = segments[0] === 'review';
-
-    if (group === 'network_error') return; // géré via rendu conditionnel
-    if (group === 'email_pending') return; // idem
-
-    if (group === 'auth' && inTabs) {
+    if (needsRedirectToLogin) {
       router.replace('/login');
-    } else if (group === 'main' && isPasswordRecovery) {
+    } else if (needsRedirectToResetPassword) {
       router.replace('/reset-password');
-    } else if (group === 'main' && !inTabs && !inReview) {
+    } else if (needsRedirectToHome) {
       router.replace('/');
     }
-  }, [group, isPasswordRecovery, segments]);
+  }, [group, needsRedirectToLogin, needsRedirectToResetPassword, needsRedirectToHome]);
 
-  if (group === 'loading') return <LoadingScreen />;
+  // Show loading screen while loading OR while redirecting
+  if (group === 'loading' || isRedirecting) return <LoadingScreen />;
   if (group === 'network_error') return <NetworkErrorScreen onRetry={onRetry} />;
   if (group === 'email_pending') return <EmailPendingScreen />;
 
@@ -90,8 +105,8 @@ export default function RootLayout() {
     'DMSans-Bold': DMSans_700Bold,
   });
 
-  // Hide splash screen once fonts and i18n are ready
-  useEffect(() => {
+  // Callback to hide splash screen once fonts, i18n, AND auth are ready
+  const hideSplashScreen = useCallback(() => {
     if (fontsLoaded && i18nReady) {
       SplashScreen.hideAsync();
     }
@@ -141,7 +156,7 @@ export default function RootLayout() {
         <AuthProvider key={retryKey}>
           <NotificationProvider>
             <AnalysisProvider>
-              <AuthGate onRetry={handleRetry} />
+              <AuthGate onRetry={handleRetry} onReady={hideSplashScreen} />
               <Toaster position="top-center" />
               {process.env.EXPO_PUBLIC_DEV_MODE === 'true' && <DebugPanel />}
             </AnalysisProvider>
