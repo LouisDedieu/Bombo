@@ -34,7 +34,6 @@ function friendlyError(msg: string, t: (key: string) => string): string {
 
 // ── Password strength ──────────────────────────────────────────────────────────
 function PasswordStrength({ password, t }: { password: string; t: (key: string) => string }) {
-  if (!password) return null;
 
   const checks = [
     password.length >= 8,
@@ -63,7 +62,7 @@ function PasswordStrength({ password, t }: { password: string; t: (key: string) 
           />
         ))}
       </View>
-      <Text className="text-[11px] text-white/50 mt-1 font-dmsans">{levels[score]}</Text>
+      {password && <Text className="text-[11px] text-white/50 mt-1 font-dmsans">{levels[score]}</Text>}
     </View>
   );
 }
@@ -348,8 +347,11 @@ export default function Login() {
                   </TouchableOpacity>
                 }
               />
-              {flow === 'signup' && <PasswordStrength password={password} t={t} />}
-              {flow === 'signin' && (
+              {flow === 'signup' ? (
+                <View className="mt-2">
+                  <PasswordStrength password={password} t={t} />
+                </View>
+              ) : (
                 <TouchableOpacity onPress={() => setFlow('forgot')} activeOpacity={0.7} className="mt-2">
                   <Text className="text-xs text-white/50 text-right font-dmsans">{t('auth.forgotPassword')}</Text>
                 </TouchableOpacity>
@@ -430,12 +432,19 @@ export default function Login() {
               </>
             )}
             {flow === 'signup' && (
-              <TouchableOpacity onPress={() => setFlow('signin')} activeOpacity={0.7}>
-                <Text className="text-white/50 text-[13px] text-center font-dmsans">
-                  {t('auth.alreadyHaveAccount')}
-                  <Text className="text-blue-400 font-dmsans-semibold">{t('auth.signIn')}</Text>
-                </Text>
-              </TouchableOpacity>
+              <>
+                <View className="flex-row items-center gap-2.5">
+                  <View className="flex-1 h-px bg-white/10" />
+                  <Text className="text-white/30 text-xs font-dmsans">{t('common.or')}</Text>
+                  <View className="flex-1 h-px bg-white/10" />
+                </View>
+                <TouchableOpacity onPress={() => setFlow('signin')} activeOpacity={0.7}>
+                  <Text className="text-white/50 text-[13px] text-center font-dmsans">
+                    {t('auth.alreadyHaveAccount')}
+                    <Text className="text-blue-400 font-dmsans-semibold">{t('auth.signIn')}</Text>
+                  </Text>
+                </TouchableOpacity>
+              </>
             )}
           </View>
 
