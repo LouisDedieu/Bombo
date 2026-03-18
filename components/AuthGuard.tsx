@@ -55,9 +55,6 @@ export function EmailPendingScreen() {
       <Text className="text-white/50 text-sm text-center leading-5 mb-6">
         {t('authGuard.confirmationEmailSentGuard')}
       </Text>
-      <TouchableOpacity onPress={() => router.replace('/login')} activeOpacity={0.7}>
-        <Text className="text-white/50 text-sm">{t('auth.backToLogin')}</Text>
-      </TouchableOpacity>
       <PrimaryButton title={t('auth.backToLogin')} onPress={() => router.replace('/login')} leftIcon="arrow-left-line" className="mt-4" />
     </View>
   );
