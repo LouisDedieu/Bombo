@@ -15,6 +15,7 @@ import Loader from '@/components/Loader';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import {PrimaryButton} from '@/components/PrimaryButton';
 import {useAuth} from '@/context/AuthContext';
+import {SafeAreaView} from 'react-native-safe-area-context';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type Flow = 'signin' | 'signup' | 'forgot';
@@ -154,7 +155,6 @@ export default function Login() {
   }, [t]);
 
   useEffect(() => {
-    setTimeout(() => emailRef.current?.focus(), 100);
     setError(null);
     setSuccessMsg(null);
   }, [flow]);
@@ -288,7 +288,8 @@ export default function Login() {
 
   // ── Main form ─────────────────────────────────────────────────────────────
   return (
-    <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <SafeAreaView className="flex-1" edges={['top']}>
+      <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView
         contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 20, paddingBottom: 40 }}
         keyboardShouldPersistTaps="handled"
@@ -445,5 +446,6 @@ export default function Login() {
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
