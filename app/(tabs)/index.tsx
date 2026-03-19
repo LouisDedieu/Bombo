@@ -190,7 +190,9 @@ interface InboxJobCardProps {
 }
 
 function InboxJobCard({ job, onPress, onDelete, animIndex }: InboxJobCardProps) {
-  const isClickable = job.status === 'done' && (job.tripId || job.cityId);
+  const isNavigable = job.status === 'done' && (job.tripId || job.cityId);
+  const isDeletable = (job.status === 'done' || job.status === 'error') && (job.tripId || job.cityId);
+  const isInteractive = isNavigable || isDeletable;
   const cardProps = mapJobToCardProps(job);
 
   const opacity = useRef(new Animated.Value(0)).current;
@@ -215,13 +217,25 @@ function InboxJobCard({ job, onPress, onDelete, animIndex }: InboxJobCardProps) 
     ]).start();
   }, []);
 
+  const handlePress = () => {
+    if (isNavigable) {
+      onPress();
+    }
+  };
+
+  const handleLongPress = () => {
+    if (isDeletable) {
+      onDelete();
+    }
+  };
+
   return (
     <Animated.View style={{ opacity, transform: [{ translateX }] }}>
       <TouchableOpacity
-        onPress={onPress}
-        onLongPress={onDelete}
-        disabled={!isClickable}
-        activeOpacity={isClickable ? 0.8 : 1}
+        onPress={handlePress}
+        onLongPress={handleLongPress}
+        disabled={!isInteractive}
+        activeOpacity={isNavigable ? 0.8 : 1}
       >
         <JobCard
           status={cardProps.status}
