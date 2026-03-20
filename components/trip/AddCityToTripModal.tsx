@@ -2,7 +2,7 @@
  * AddCityToTripModal - Modal to add a city to a trip
  * Allows either importing an existing saved city or adding a new one via geocoding.
  */
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,26 +11,20 @@ import {
   FlatList,
   Modal,
   Alert,
-  Animated,
-  Easing,
+  Keyboard,
+  TouchableWithoutFeedback, Animated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import {
-  X,
-  Search,
-  MapPin,
-  Plus,
-  Calendar,
-  Loader2,
-  Building2,
-  ChevronRight,
-  BookMarked,
-  PenLine,
-} from 'lucide-react-native';
+import { useTranslation } from 'react-i18next';
+import Icon from 'react-native-remix-icon';
 import { useAuth } from '@/context/AuthContext';
 import { getUserSavedCities } from '@/services/cityService';
 import { addCityToTrip, addDestinationToTrip, DbDay } from '@/services/reviewService';
 import { CityData } from '@/types/api';
+import { PrimaryButton } from '@/components/PrimaryButton';
+import { SecondaryButton } from '@/components/SecondaryButton';
+import Loader from '@/components/Loader';
+import {Input} from "@/components/Input";
 
 interface SavedCityItem {
   id: string;
@@ -59,50 +53,29 @@ interface AddCityToTripModalProps {
   onClose: () => void;
   tripId: string;
   tripDays: DbDay[];
-  existingDestinations: string[]; // List of city names already in trip
+  existingDestinations: string[];
   onCityAdded: () => void;
 }
 
 type Step = 'choose-mode' | 'select-city' | 'select-day' | 'manual-city';
 
-function SpinningLoader({ size = 16, color = '#a855f7' }: { size?: number; color?: string }) {
-  const rotation = React.useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.loop(
-      Animated.timing(rotation, {
-        toValue: 1,
-        duration: 1000,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      })
-    ).start();
-  }, []);
-  const spin = rotation.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
-  return (
-    <Animated.View style={{ transform: [{ rotate: spin }] }}>
-      <Loader2 size={size} color={color} />
-    </Animated.View>
-  );
-}
-
 export function AddCityToTripModal({
-  visible,
-  onClose,
-  tripId,
-  tripDays,
-  existingDestinations,
-  onCityAdded,
-}: AddCityToTripModalProps) {
+                                     visible,
+                                     onClose,
+                                     tripId,
+                                     tripDays,
+                                     existingDestinations,
+                                     onCityAdded,
+                                   }: AddCityToTripModalProps) {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const { t } = useTranslation();
 
-  // Saved cities state
   const [cities, setCities] = useState<SavedCityItem[]>([]);
   const [loadingCities, setLoadingCities] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCity, setSelectedCity] = useState<CityData | null>(null);
 
-  // Manual city state
   const [manualQuery, setManualQuery] = useState('');
   const [geoResults, setGeoResults] = useState<NominatimResult[]>([]);
   const [geoLoading, setGeoLoading] = useState(false);
@@ -111,7 +84,45 @@ export function AddCityToTripModal({
   const [step, setStep] = useState<Step>('choose-mode');
   const [adding, setAdding] = useState(false);
 
-  // Load saved cities when entering select-city step
+  // Animation
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
+  const sheetTranslateY = useRef(new Animated.Value(600)).current;
+
+  const handleClose = () => {
+    Animated.parallel([
+      Animated.timing(backdropOpacity, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(sheetTranslateY, {
+        toValue: 600,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+    ]).start(() => onClose());
+  };
+
+  useEffect(() => {
+    if (visible) {
+      Animated.parallel([
+        Animated.timing(backdropOpacity, {
+          toValue: 1,
+          duration: 280,
+          useNativeDriver: true,
+        }),
+        Animated.spring(sheetTranslateY, {
+          toValue: 0,
+          damping: 22,
+          stiffness: 180,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      // fermeture gérée par handleClose
+    }
+  }, [visible]);
+
   useEffect(() => {
     if (visible && step === 'select-city' && user?.id) {
       setLoadingCities(true);
@@ -122,7 +133,6 @@ export function AddCityToTripModal({
     }
   }, [visible, step, user?.id]);
 
-  // Reset state when modal closes
   useEffect(() => {
     if (!visible) {
       setSelectedCity(null);
@@ -134,15 +144,16 @@ export function AddCityToTripModal({
     }
   }, [visible]);
 
-  // ── Saved cities helpers ──────────────────────────────────────────────────
-
   const filteredCities = cities.filter((item) => {
     if (!item.cities) return false;
     const query = searchQuery.toLowerCase();
+    const cityName = item.cities.city_name || '';
+    const cityTitle = item.cities.city_title || '';
+    const country = item.cities.country || '';
     return (
-      item.cities.city_name?.toLowerCase().includes(query) ||
-      item.cities.city_title?.toLowerCase().includes(query) ||
-      item.cities.country?.toLowerCase().includes(query)
+      cityName.toLowerCase().includes(query) ||
+      cityTitle.toLowerCase().includes(query) ||
+      country.toLowerCase().includes(query)
     );
   });
 
@@ -157,8 +168,6 @@ export function AddCityToTripModal({
       tripDays.filter((day) => day.location?.toLowerCase() === cityName.toLowerCase()),
     [tripDays]
   );
-
-  // ── Geocoding (Nominatim) ─────────────────────────────────────────────────
 
   const searchCity = async () => {
     const q = manualQuery.trim();
@@ -176,23 +185,21 @@ export function AddCityToTripModal({
       if (!res.ok) throw new Error('Geocoding error');
       const data: NominatimResult[] = await res.json();
       if (data.length === 0) {
-        setGeoError('Aucun résultat. Essayez un nom différent.');
+        setGeoError(t('addCityToTrip.noResults'));
       }
       setGeoResults(data);
     } catch {
-      setGeoError('Impossible de rechercher. Vérifiez votre connexion.');
+      setGeoError(t('addCityToTrip.geoError'));
     } finally {
       setGeoLoading(false);
     }
   };
 
-  // ── Action handlers ───────────────────────────────────────────────────────
-
   const handleSelectCity = (city: CityData) => {
     setSelectedCity(city);
-    if (isCityInTrip(city.city_name)) {
+    if (city.city_name && isCityInTrip(city.city_name)) {
       setStep('select-day');
-    } else {
+    } else if (city.id) {
       handleAddSavedCity(city.id, undefined, true);
     }
   };
@@ -210,13 +217,13 @@ export function AddCityToTripModal({
         create_new_day: createNewDay,
       });
       Alert.alert(
-        'Ajouté !',
-        `${result.spots_count} point${result.spots_count > 1 ? 's' : ''} ajouté${result.spots_count > 1 ? 's' : ''} à ${result.city_name}`,
-        [{ text: 'OK', onPress: onClose }]
+        t('addCityToTrip.added'),
+        t('addCityToTrip.pointsAdded', { count: result.spots_count, plural: result.spots_count > 1 ? 's' : '', city: result.city_name }),
+        [{ text: t('common.ok'), onPress: handleClose }]
       );
       onCityAdded();
     } catch (err: any) {
-      Alert.alert('Erreur', err.message || "Impossible d'ajouter la ville");
+      Alert.alert(t('addCityToTrip.error'), err.message || t('addCityToTrip.cannotAddCity'));
     } finally {
       setAdding(false);
     }
@@ -234,96 +241,87 @@ export function AddCityToTripModal({
       await addDestinationToTrip(tripId, { city_name: cityName, country, latitude, longitude });
 
       Alert.alert(
-        'Ajouté !',
-        `${cityName} a été ajouté à votre itinéraire avec un jour vide.`,
-        [{ text: 'OK', onPress: onClose }]
+        t('addCityToTrip.added'),
+        t('addCityToTrip.addedToItinerary', { city: cityName }),
+        [{ text: t('common.ok'), onPress: handleClose }]
       );
       onCityAdded();
     } catch (err: any) {
-      Alert.alert('Erreur', err.message || "Impossible d'ajouter la ville");
+      Alert.alert(t('addCityToTrip.error'), err.message || t('addCityToTrip.cannotAddCity'));
     } finally {
       setAdding(false);
     }
   };
 
-  // ── Render helpers ────────────────────────────────────────────────────────
-
   const renderChooseMode = () => (
     <View className="p-4 gap-3">
-      <Text className="text-zinc-400 text-sm mb-2">
-        Comment souhaitez-vous ajouter une ville ?
+      <Text className="text-white/60 font-dmsans text-sm mb-2">
+        {t('addCityToTrip.howToAdd')}
       </Text>
 
       <TouchableOpacity
         onPress={() => setStep('select-city')}
         className="flex-row items-center p-4 rounded-xl"
-        style={{ backgroundColor: '#27272a', borderWidth: 1, borderColor: '#3f3f46' }}
+        style={{ backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}
       >
         <View
           className="w-11 h-11 rounded-full items-center justify-center mr-3"
-          style={{ backgroundColor: '#a855f733' }}
+          style={{ backgroundColor: 'rgba(168,85,247,0.2)' }}
         >
-          <BookMarked size={22} color="#a855f7" />
+          <Icon name="book-marked-line" size={22} color="#a855f7" />
         </View>
         <View className="flex-1">
-          <Text className="text-white font-semibold">Importer une ville sauvegardée</Text>
-          <Text className="text-zinc-500 text-xs mt-0.5">
-            Depuis vos City Guides existants
+          <Text className="title-righteous">{t('addCityToTrip.importSavedCity')}</Text>
+          <Text className="text-white/50 font-dmsans-medium text-xs mt-0.5">
+            {t('addCityToTrip.fromExistingGuides')}
           </Text>
         </View>
-        <ChevronRight size={18} color="#71717a" />
+        <Icon name="arrow-right-s-line" size={18} color="rgba(255,255,255,0.5)" />
       </TouchableOpacity>
 
       <TouchableOpacity
         onPress={() => setStep('manual-city')}
         className="flex-row items-center p-4 rounded-xl"
-        style={{ backgroundColor: '#27272a', borderWidth: 1, borderColor: '#3f3f46' }}
+        style={{ backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}
       >
         <View
           className="w-11 h-11 rounded-full items-center justify-center mr-3"
-          style={{ backgroundColor: '#3b82f633' }}
+          style={{ backgroundColor: 'rgba(59,130,246,0.2)' }}
         >
-          <PenLine size={22} color="#3b82f6" />
+          <Icon name="pencil-line" size={22} color="#3b82f6" />
         </View>
         <View className="flex-1">
-          <Text className="text-white font-semibold">Ajouter une nouvelle ville</Text>
-          <Text className="text-zinc-500 text-xs mt-0.5">
-            Saisir un nom et localiser sur la carte
+          <Text className="title-righteous">{t('addCityToTrip.addNewCity')}</Text>
+          <Text className="text-white/50 font-dmsans-medium text-xs mt-0.5">
+            {t('addCityToTrip.enterNameAndLocate')}
           </Text>
         </View>
-        <ChevronRight size={18} color="#71717a" />
+        <Icon name="arrow-right-s-line" size={18} color="rgba(255,255,255,0.5)" />
       </TouchableOpacity>
     </View>
   );
 
   const renderSavedCities = () => (
     <>
-      {/* Search */}
       <View className="px-4 py-3">
-        <View
-          className="flex-row items-center rounded-lg px-3 py-2"
-          style={{ backgroundColor: '#27272a' }}
-        >
-          <Search size={18} color="#71717a" />
-          <TextInput
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholder="Rechercher une ville..."
-            placeholderTextColor="#52525b"
-            className="flex-1 ml-2 text-white"
-          />
-        </View>
+        <Input
+          leftIcon="search-line"
+          placeholder={t('addCityToTrip.searchCity')}
+          variant={'dark'}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
       </View>
 
       {loadingCities ? (
-        <View className="flex-1 items-center justify-center py-12">
-          <SpinningLoader size={32} color="#a855f7" />
+        <View className="flex-1 items-center justify-center mt-10" style={{ marginBottom: insets.bottom}}>
+          <Loader size={40} />
         </View>
       ) : filteredCities.length === 0 ? (
-        <View className="flex-1 items-center justify-center py-12 px-4">
-          <Building2 size={48} color="#52525b" />
-          <Text className="text-zinc-500 text-center mt-4">
-            {searchQuery ? 'Aucune ville trouvée' : 'Aucune ville sauvegardée'}
+        <View className="flex-1 items-center justify-center py-12 px-4" style={{ marginBottom: insets.bottom}}>
+          <Icon name="building-4-line" size={48} color="rgba(255,255,255,0.3)" />
+          <Text className="text-white/50 font-dmsans-semibold text-center mt-4">
+            {searchQuery ? t('addCityToTrip.noCityFound') : t('addCityToTrip.noCitySaved')}
           </Text>
         </View>
       ) : (
@@ -336,37 +334,41 @@ export function AddCityToTripModal({
             const alreadyInTrip = isCityInTrip(city.city_name);
             const highlightsCount = city.city_highlights?.length || 0;
             return (
-              <TouchableOpacity
-                onPress={() => handleSelectCity(city)}
+              <View
                 className="flex-row items-center p-3 rounded-xl mb-2"
                 style={{
-                  backgroundColor: '#27272a',
+                  backgroundColor: 'rgba(255,255,255,0.1)',
                   borderWidth: 1,
-                  borderColor: alreadyInTrip ? '#a855f74D' : '#3f3f46',
+                  borderColor: alreadyInTrip ? 'rgba(168,85,247,0.3)' : 'rgba(255,255,255,0.1)',
                 }}
               >
                 <View
                   className="w-10 h-10 rounded-full items-center justify-center mr-3"
-                  style={{ backgroundColor: '#a855f733' }}
                 >
-                  <Building2 size={20} color="#a855f7" />
+                  <Icon name="building-line" size={20} color="#a855f7" />
                 </View>
                 <View className="flex-1">
-                  <Text className="text-white font-medium">{city.city_title || city.city_name}</Text>
+                  <Text className="title-righteous">{city.city_title || city.city_name}</Text>
                   <View className="flex-row items-center gap-2 mt-0.5">
-                    <MapPin size={12} color="#71717a" />
-                    <Text className="text-zinc-500 text-xs">
+                    <Icon name="map-pin-line" size={12} color="rgba(255,255,255,0.5)" />
+                    <Text className="text-white/50 font-dmsans text-xs">
                       {city.city_name}, {city.country}
                     </Text>
-                    <Text className="text-zinc-600 text-xs">•</Text>
-                    <Text className="text-zinc-500 text-xs">{highlightsCount} points</Text>
+                    <Text className="text-white/30 font-dmsans text-xs">•</Text>
+                    <Text className="text-white/50 font-dmsans text-xs">{highlightsCount} {t('addCityToTrip.points')}</Text>
                   </View>
                   {alreadyInTrip && (
-                    <Text className="text-purple-400 text-xs mt-1">Déjà dans cet itinéraire</Text>
+                    <Text className="text-purple-400 font-dmsans-medium text-xs mt-1">{t('addCityToTrip.alreadyInItinerary')}</Text>
                   )}
                 </View>
-                <ChevronRight size={20} color="#71717a" />
-              </TouchableOpacity>
+                <PrimaryButton
+                  title={t('addCityToTrip.add')}
+                  onPress={() => handleSelectCity(city)}
+                  disabled={adding || alreadyInTrip || !city.id}
+                  size={"sm"}
+                  color={'purple'}
+                />
+              </View>
             );
           }}
           contentContainerStyle={{ padding: 16 }}
@@ -381,62 +383,65 @@ export function AddCityToTripModal({
     return (
       <View className="flex-1 p-4">
         <Text className="text-white text-lg font-bold mb-2">
-          {selectedCity.city_name} existe déjà
+          {selectedCity.city_name} {t('addCityToTrip.alreadyExists')}
         </Text>
-        <Text className="text-zinc-400 text-sm mb-4">
-          Ajouter les points à un jour existant ou créer un nouveau jour ?
+        <Text className="text-white/60 text-sm mb-4">
+          {t('addCityToTrip.addToExistingOrNew')}
         </Text>
 
         {existingDays.map((day) => (
           <TouchableOpacity
             key={day.id}
-            onPress={() => handleAddSavedCity(selectedCity.id, day.id, false)}
-            disabled={adding}
+            onPress={() => selectedCity.id && handleAddSavedCity(selectedCity.id, day.id, false)}
+            disabled={adding || !selectedCity.id}
             className="flex-row items-center p-3 rounded-xl mb-2"
-            style={{ backgroundColor: '#27272a', borderWidth: 1, borderColor: '#3f3f46' }}
+            style={{ backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}
           >
             <View
               className="w-10 h-10 rounded-full items-center justify-center mr-3"
-              style={{ backgroundColor: '#3b82f633' }}
+              style={{ backgroundColor: 'rgba(59,130,246,0.2)' }}
             >
-              <Calendar size={20} color="#3b82f6" />
+              {adding ? (
+                <Loader size={20} color="#3b82f6" />
+              ) : (
+                <Icon name="calendar-line" size={20} color="#3b82f6" />
+              )}
             </View>
             <View className="flex-1">
-              <Text className="text-white font-medium">Jour {day.day_number}</Text>
-              <Text className="text-zinc-500 text-xs">
-                {day.theme || day.location} • {day.spots.length} spots
+              <Text className="text-white font-medium">{t('addCityToTrip.jour', { number: day.day_number })}</Text>
+              <Text className="text-white/50 text-xs">
+                {day.theme || day.location} • {day.spots.length} {t('addCityToTrip.spots')}
               </Text>
             </View>
-            {adding ? <SpinningLoader size={18} color="#3b82f6" /> : <Plus size={20} color="#3b82f6" />}
           </TouchableOpacity>
         ))}
 
         <TouchableOpacity
-          onPress={() => handleAddSavedCity(selectedCity.id, undefined, true)}
-          disabled={adding}
+          onPress={() => selectedCity.id && handleAddSavedCity(selectedCity.id, undefined, true)}
+          disabled={adding || !selectedCity.id}
           className="flex-row items-center p-3 rounded-xl"
-          style={{ backgroundColor: '#a855f71A', borderWidth: 1, borderColor: '#a855f74D' }}
+          style={{ backgroundColor: 'rgba(168,85,247,0.1)', borderWidth: 1, borderColor: 'rgba(168,85,247,0.3)' }}
         >
           <View
             className="w-10 h-10 rounded-full items-center justify-center mr-3"
-            style={{ backgroundColor: '#a855f733' }}
+            style={{ backgroundColor: 'rgba(168,85,247,0.2)' }}
           >
-            <Plus size={20} color="#a855f7" />
+            <Icon name="add-line" size={20} color="#a855f7" />
           </View>
           <View className="flex-1">
-            <Text className="text-purple-400 font-medium">Créer un nouveau jour</Text>
+            <Text className="text-purple-400 font-medium">{t('addCityToTrip.createNewDay')}</Text>
             <Text className="text-purple-500 text-xs">
-              Jour {tripDays.length + 1} - {selectedCity.city_name}
+              {t('addCityToTrip.jour', { number: tripDays.length + 1 })} - {selectedCity.city_name}
             </Text>
           </View>
-          {adding && <SpinningLoader size={18} color="#a855f7" />}
+          {adding && <Loader size={18} color="#a855f7" />}
         </TouchableOpacity>
 
         <TouchableOpacity
           onPress={() => { setSelectedCity(null); setStep('select-city'); }}
           className="mt-4 py-3 items-center"
         >
-          <Text className="text-zinc-400">Retour</Text>
+          <Text className="text-white/60">{t('addCityToTrip.back')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -444,51 +449,34 @@ export function AddCityToTripModal({
 
   const renderManualCity = () => (
     <>
-      {/* Search — même style que renderSavedCities */}
       <View className="px-4 py-3">
-        <View
-          className="flex-row items-center rounded-lg px-3 py-2"
-          style={{ backgroundColor: '#27272a' }}
-        >
-          <Search size={18} color="#71717a" />
-          <TextInput
-            value={manualQuery}
-            onChangeText={setManualQuery}
-            onSubmitEditing={searchCity}
-            placeholder="Ex: Kyoto, Tokyo, Lisbonne..."
-            placeholderTextColor="#52525b"
-            returnKeyType="search"
-            autoFocus
-            className="flex-1 ml-2 text-white"
-          />
-          {geoLoading
-            ? <SpinningLoader size={18} color="#71717a" />
-            : manualQuery.trim().length > 0 && (
-                <TouchableOpacity onPress={searchCity} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Text className="text-blue-400 font-medium text-sm ml-2">Chercher</Text>
-                </TouchableOpacity>
-              )
-          }
-        </View>
+        <Input
+          leftIcon="search-line"
+          placeholder={t('addCityToTrip.enterCityName')}
+          variant={'dark'}
+          value={manualQuery}
+          onChangeText={setManualQuery}
+          onSubmitEditing={searchCity}
+          returnKeyType="search"
+        />
       </View>
 
-      {/* États — même logique que renderSavedCities */}
       {geoLoading ? (
-        <View className="flex-1 items-center justify-center py-12">
-          <SpinningLoader size={32} color="#3b82f6" />
+        <View className="flex-1 items-center justify-center mt-10" style={{ marginBottom: insets.bottom}}>
+          <Loader size={40} />
         </View>
       ) : !!geoError ? (
-        <View className="flex-1 items-center justify-center py-12 px-4">
-          <MapPin size={48} color="#52525b" />
-          <Text className="text-zinc-500 text-center mt-4">{geoError}</Text>
+        <View className="flex-1 items-center justify-center py-12 px-4" style={{ marginBottom: insets.bottom}}>
+          <Icon name="map-pin-line" size={48} color="rgba(255,255,255,0.3)" />
+          <Text className="text-white/50 text-center mt-4">{geoError}</Text>
         </View>
       ) : geoResults.length === 0 ? (
-        <View className="flex-1 items-center justify-center py-12 px-4">
-          <MapPin size={48} color="#52525b" />
-          <Text className="text-zinc-500 text-center mt-4">
+        <View className="flex-1 items-center justify-center py-12 px-4" style={{ marginBottom: insets.bottom}}>
+          <Icon name="map-pin-line" size={48} color="rgba(255,255,255,0.3)" />
+          <Text className="text-white/50 text-center mt-4">
             {manualQuery.trim()
-              ? 'Aucun résultat. Essayez un nom différent.'
-              : 'Saisissez un nom de ville pour rechercher'}
+              ? t('addCityToTrip.noGeoResults')
+              : t('addCityToTrip.enterCityName')}
           </Text>
         </View>
       ) : (
@@ -504,24 +492,30 @@ export function AddCityToTripModal({
                 onPress={() => handleAddManualCity(item)}
                 disabled={adding}
                 className="flex-row items-center p-3 rounded-xl mb-2"
-                style={{ backgroundColor: '#27272a', borderWidth: 1, borderColor: '#3f3f46' }}
+                style={{ backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}
               >
                 <View
                   className="w-10 h-10 rounded-full items-center justify-center mr-3"
-                  style={{ backgroundColor: '#3b82f633' }}
                 >
-                  {adding
-                    ? <SpinningLoader size={18} color="#3b82f6" />
-                    : <MapPin size={20} color="#3b82f6" />
-                  }
+                  {adding ? (
+                    <Loader size={18} color="#3b82f6" />
+                  ) : (
+                    <Icon name="map-pin-fill" size={24} color="#3b82f6" />
+                  )}
                 </View>
                 <View className="flex-1">
-                  <Text className="text-white font-medium">{cityLabel}</Text>
+                  <Text className="title-righteous">{cityLabel}</Text>
                   <View className="flex-row items-center gap-2 mt-0.5">
-                    <Text className="text-zinc-500 text-xs">{country}</Text>
+                    <Text className="text-white/50 font-dmsans-medium text-xs">{country}</Text>
                   </View>
                 </View>
-                <ChevronRight size={20} color="#71717a" />
+                <PrimaryButton
+                  title={t('addCityToTrip.addNew')}
+                  onPress={() => handleAddManualCity(item)}
+                  disabled={adding}
+                  size={"sm"}
+                  color={'accent'}
+                />
               </TouchableOpacity>
             );
           }}
@@ -531,13 +525,11 @@ export function AddCityToTripModal({
     </>
   );
 
-  // ── Title by step ─────────────────────────────────────────────────────────
-
   const stepTitle: Record<Step, string> = {
-    'choose-mode': 'Ajouter une ville',
-    'select-city': 'Mes City Guides',
-    'select-day': 'Choisir un jour',
-    'manual-city': 'Nouvelle ville',
+    'choose-mode': t('addCityToTrip.addCity'),
+    'select-city': t('addCityToTrip.selectCity'),
+    'select-day': t('addCityToTrip.chooseDay'),
+    'manual-city': t('addCityToTrip.newCity'),
   };
 
   const backStep: Partial<Record<Step, Step>> = {
@@ -545,44 +537,53 @@ export function AddCityToTripModal({
     'manual-city': 'choose-mode',
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────
-
   return (
     <Modal
       visible={visible}
-      animationType="slide"
+      animationType="none"
       transparent
-      onRequestClose={onClose}
+      onRequestClose={handleClose}
     >
-      <View className="flex-1 justify-end" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
-        <View
-          className="bg-zinc-900 rounded-t-3xl"
-          style={{ maxHeight: '80%', paddingBottom: insets.bottom + 16 }}
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <Animated.View
+          className="flex-1 justify-end"
+          style={{ backgroundColor: 'rgba(0,0,0,0.6)', opacity: backdropOpacity }}
         >
-          {/* Header */}
-          <View className="flex-row items-center justify-between p-4 border-b border-zinc-800">
-            <View className="flex-row items-center gap-2">
-              {backStep[step] && (
-                <TouchableOpacity
-                  onPress={() => setStep(backStep[step]!)}
-                  className="pr-2"
-                >
-                  <Text className="text-zinc-400 text-sm">← Retour</Text>
+          <TouchableWithoutFeedback>
+            <Animated.View
+              className="rounded-t-3xl"
+              style={{
+                backgroundColor: '#1e1a64',
+                maxHeight: '80%',
+                paddingBottom: insets.bottom + 16,
+                transform: [{ translateY: sheetTranslateY }],
+              }}
+            >
+              <View className="flex-row items-center justify-between p-4" style={{ borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.1)' }}>
+                <View className="row-center">
+                  {backStep[step] && (
+                    <TouchableOpacity
+                      onPress={() => setStep(backStep[step]!)}
+                      className="p-2"
+                    >
+                      <Icon name={"arrow-left-s-line"} size={24} color="#fff" />
+                    </TouchableOpacity>
+                  )}
+                  <Text className="text-lg font-righteous text-white">{stepTitle[step]}</Text>
+                </View>
+                <TouchableOpacity onPress={handleClose} className="p-2">
+                  <Icon name="close-line" size={20} color="rgba(255,255,255,0.5)" />
                 </TouchableOpacity>
-              )}
-              <Text className="text-lg font-bold text-white">{stepTitle[step]}</Text>
-            </View>
-            <TouchableOpacity onPress={onClose} className="p-2">
-              <X size={20} color="#71717a" />
-            </TouchableOpacity>
-          </View>
+              </View>
 
-          {step === 'choose-mode' && renderChooseMode()}
-          {step === 'select-city' && renderSavedCities()}
-          {step === 'select-day' && renderDaySelection()}
-          {step === 'manual-city' && renderManualCity()}
-        </View>
-      </View>
+              {step === 'choose-mode' && renderChooseMode()}
+              {step === 'select-city' && renderSavedCities()}
+              {step === 'select-day' && renderDaySelection()}
+              {step === 'manual-city' && renderManualCity()}
+            </Animated.View>
+          </TouchableWithoutFeedback>
+        </Animated.View>
+      </TouchableWithoutFeedback>
     </Modal>
   );
 }

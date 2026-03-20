@@ -1,104 +1,73 @@
-/**
- * pages/Login.tsx (React Native — NativeWind)
- *
- * Port complet du Login React. Flows gérés :
- * - Sign in (avec détection "email non confirmé")
- * - Sign up (avec écran de confirmation email + renvoi)
- * - Forgot password (envoi du lien de reset)
- * - Post-confirmation return (bannière succès via Linking)
- * - Redirect vers destination initiale après login
- * - Erreurs réseau / rate-limit / génériques
- */
-
-import React, { useState, useEffect, useRef } from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import {
-  View,
+  KeyboardAvoidingView,
+  Linking,
+  Platform,
+  ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
-  Animated,
-  ActivityIndicator,
- Linking } from 'react-native';
-import { Eye, EyeOff, ArrowLeft, MailCheck, AlertCircle, CheckCircle2 } from 'lucide-react-native';
+  View,
+} from 'react-native';
+import { useTranslation } from 'react-i18next';
+import Icon from 'react-native-remix-icon';
+import Loader from '@/components/Loader';
 import * as AppleAuthentication from 'expo-apple-authentication';
-import {useAuth} from "@/context/AuthContext";
+import {PrimaryButton} from '@/components/PrimaryButton';
+import {useAuth} from '@/context/AuthContext';
+import {SafeAreaView} from 'react-native-safe-area-context';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type Flow = 'signin' | 'signup' | 'forgot';
 
 // ── Error mapping ──────────────────────────────────────────────────────────────
-function friendlyError(msg: string): string {
-  if (msg.includes('Invalid login credentials'))
-    return 'Email ou mot de passe incorrect.';
-  if (msg.includes('Email not confirmed'))
-    return 'Confirmez votre email avant de vous connecter. Vérifiez votre boîte mail.';
-  if (msg.includes('User already registered'))
-    return 'Un compte existe déjà avec cet email. Connectez-vous.';
-  if (msg.includes('Password should be'))
-    return 'Le mot de passe doit contenir au moins 6 caractères.';
-  if (msg.includes('rate limit') || msg.includes('too many'))
-    return 'Trop de tentatives. Attendez quelques minutes avant de réessayer.';
-  if (msg.includes('Unable to validate') || msg.includes('network'))
-    return 'Connexion impossible. Vérifiez votre connexion internet.';
-  if (msg.includes('Email link is invalid') || msg.includes('Token has expired'))
-    return 'Ce lien a expiré. Demandez un nouveau lien de réinitialisation.';
+function friendlyError(msg: string, t: (key: string) => string): string {
+  if (msg.includes('Invalid login credentials')) return t('auth.emailOrPasswordIncorrect');
+  if (msg.includes('Email not confirmed')) return t('auth.confirmEmailFirst');
+  if (msg.includes('User already registered')) return t('auth.accountAlreadyExists');
+  if (msg.includes('Password should be')) return t('auth.passwordTooShort');
+  if (msg.includes('rate limit') || msg.includes('too many')) return t('auth.tooManyAttempts');
+  if (msg.includes('Unable to validate') || msg.includes('network')) return t('auth.connectionFailed');
+  if (msg.includes('Email link is invalid') || msg.includes('Token has expired')) return t('auth.linkExpired');
   return msg;
 }
 
 // ── Password strength ──────────────────────────────────────────────────────────
-function PasswordStrength({ password }: { password: string }) {
+function PasswordStrength({ password, email, t }: { password: string; email: string; t: (key: string) => string }) {
   if (!password) return null;
-
+  
   const checks = [
     password.length >= 8,
     /[A-Z]/.test(password),
     /[0-9]/.test(password),
     /[^a-zA-Z0-9]/.test(password),
+    password.toLowerCase() !== email.toLowerCase(),
   ];
-  const score  = checks.filter(Boolean).length;
-  const levels = ['Très faible', 'Faible', 'Moyen', 'Fort', 'Très fort'];
+  const score = checks.filter(Boolean).length;
+  const levels = [
+    t('auth.strengthVeryWeak'),
+    t('auth.strengthWeak'),
+    t('auth.strengthMedium'),
+    t('auth.strengthStrong'),
+    t('auth.strengthVeryStrong'),
+  ];
   const colors = ['#ef4444', '#f97316', '#eab308', '#3b82f6', '#10b981'];
+  const color = colors[Math.min(score, 4)];
 
   return (
     <View className="mt-1">
-      <View className="flex-row gap-1 mb-1">
-        {[0, 1, 2, 3].map((i) => (
+      <View className="flex-row gap-1">
+        {[0, 1, 2, 3, 4].map((i) => (
           <View
             key={i}
             className="flex-1 h-1 rounded-sm"
-            style={{ backgroundColor: i < score ? colors[score] : '#27272a' }}
+            style={{ backgroundColor: i < score ? color : 'rgba(255,255,255,0.1)' }}
           />
         ))}
       </View>
-      <Text className="text-[11px] text-zinc-500">{levels[score]}</Text>
+      <Text className="text-[11px] text-white/50 mt-1 font-dmsans">{levels[score]}</Text>
     </View>
   );
-}
-
-// ── Animated fade helper ───────────────────────────────────────────────────────
-function FadeIn({
-                  visible,
-                  children,
-                }: {
-  visible: boolean;
-  children: React.ReactNode;
-}) {
-  const opacity = useRef(new Animated.Value(visible ? 1 : 0)).current;
-
-  useEffect(() => {
-    Animated.timing(opacity, {
-      toValue: visible ? 1 : 0,
-      duration: 180,
-      useNativeDriver: true,
-    }).start();
-  }, [visible]);
-
-  if (!visible) return null;
-  // opacity est une Animated.Value — doit rester en style inline
-  return <Animated.View style={{ opacity }}>{children}</Animated.View>;
 }
 
 // ── Field component ────────────────────────────────────────────────────────────
@@ -112,49 +81,43 @@ interface FieldProps {
   keyboardType?: 'email-address' | 'default';
   error?: boolean;
   suffix?: React.ReactNode;
-  inputRef?: React.RefObject<TextInput>;
+  inputRef?: React.RefObject<TextInput | null>;
   autoCapitalize?: 'none' | 'sentences';
 }
 
 function Field({
-                 label,
-                 value,
-                 onChangeText,
-                 placeholder,
-                 secureTextEntry,
-                 autoComplete,
-                 keyboardType = 'default',
-                 error,
-                 suffix,
-                 inputRef,
-                 autoCapitalize = 'none',
-               }: FieldProps) {
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  secureTextEntry,
+  keyboardType = 'default',
+  error,
+  suffix,
+  inputRef,
+  autoCapitalize = 'none',
+}: FieldProps) {
   return (
     <View className="gap-1.5">
-      <Text className="text-[11px] font-semibold text-zinc-400 uppercase tracking-[0.8px]">
-        {label}
-      </Text>
+      <Text className="text-[11px] font-semibold text-white/50 uppercase tracking-[0.8px] font-dmsans">{label}</Text>
       <View
-        className={`flex-row items-center bg-zinc-900 border rounded-[10px] ${
-          error ? 'border-red-500/60' : 'border-zinc-800'
+        className={`flex-row items-center bg-surface-secondary rounded-[10px] border ${
+          error ? 'border-red-500/60' : 'border-white/10'
         }`}
       >
         <TextInput
           ref={inputRef}
           className="flex-1 text-white text-sm px-[14px] py-3"
-          style={suffix ? { paddingRight: 40 } : undefined}
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
-          placeholderTextColor="#52525b"
+          placeholderTextColor="rgba(255,255,255,0.3)"
           secureTextEntry={secureTextEntry}
           keyboardType={keyboardType}
           autoCapitalize={autoCapitalize}
           autoCorrect={false}
         />
-        {suffix && (
-          <View className="absolute right-3">{suffix}</View>
-        )}
+        {suffix && <View className="absolute right-3">{suffix}</View>}
       </View>
     </View>
   );
@@ -162,60 +125,42 @@ function Field({
 
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function Login() {
-  const { signIn, signUp, signInWithGoogle, signInWithApple, resetPassword, resendConfirmation, isAuthenticated, status } = useAuth();
+  const { signIn, signUp, signInWithGoogle, signInWithApple, resetPassword, resendConfirmation } = useAuth();
+  const { t } = useTranslation();
 
-  const [flow,          setFlow]         = useState<Flow>('signin');
-  const [email,         setEmail]        = useState('');
-  const [password,      setPassword]     = useState('');
-  const [showPass,      setShowPass]     = useState(false);
-  const [loading,       setLoading]      = useState(false);
+  const [flow, setFlow] = useState<Flow>('signin');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPass, setShowPass] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [socialLoading, setSocialLoading] = useState(false);
   const [appleLoading, setAppleLoading] = useState(false);
   const [appleAvailable, setAppleAvailable] = useState(false);
-  const [error,         setError]        = useState<string | null>(null);
-  const [successMsg,    setSuccessMsg]   = useState<string | null>(null);
-  const [emailSent,     setEmailSent]    = useState(false);
-  const [resetSent,     setResetSent]    = useState(false);
-  const [resending,     setResending]    = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [emailSent, setEmailSent] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
+  const [resending, setResending] = useState(false);
 
   const emailRef = useRef<TextInput>(null);
 
-  // Check if Apple Sign-In is available on this device
   useEffect(() => {
     AppleAuthentication.isAvailableAsync().then(setAppleAvailable);
   }, []);
 
-  // Détection post-confirmation via deep link (?confirmed=true)
   useEffect(() => {
     Linking.getInitialURL().then((url) => {
       if (url?.includes('confirmed=true')) {
-        setSuccessMsg('Email confirmé ! Vous pouvez maintenant vous connecter.');
+        setSuccessMsg(t('auth.emailConfirmed'));
       }
     });
-    const sub = Linking.addEventListener('url', ({ url }) => {
-      if (url?.includes('confirmed=true')) {
-        setSuccessMsg('Email confirmé ! Vous pouvez maintenant vous connecter.');
-      }
-    });
-    return () => sub.remove();
-  }, []);
+  }, [t]);
 
-  // Redirect si déjà authentifié
   useEffect(() => {
-    if (isAuthenticated) {
-      // AppNavigator bascule automatiquement sur le groupe 'main'
-      // via useAuthGuardState — pas besoin de navigation explicite.
-    }
-  }, [isAuthenticated]);
-
-  // Focus email + reset erreurs au changement de flow
-  useEffect(() => {
-    setTimeout(() => emailRef.current?.focus(), 100);
     setError(null);
     setSuccessMsg(null);
   }, [flow]);
 
-  // ── Submit ─────────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
     setError(null);
     setSuccessMsg(null);
@@ -224,25 +169,28 @@ export default function Login() {
     try {
       if (flow === 'signin') {
         const { error } = await signIn(email, password);
-        if (error) setError(friendlyError(error.message));
-        // Le redirect est géré par AppNavigator dès que isAuthenticated passe à true
-
+        if (error) setError(friendlyError(error.message, t));
       } else if (flow === 'signup') {
-        if (password.length < 6) {
-          setError('Le mot de passe doit contenir au moins 6 caractères.');
+        if (password.length < 8) {
+          setError(t('auth.passwordTooShort'));
+          setLoading(false);
+          return;
+        }
+        if (password.toLowerCase() === email.toLowerCase()) {
+          setError(t('auth.passwordCannotBeEmail'));
+          setLoading(false);
           return;
         }
         const { error, emailSent: sent } = await signUp(email, password);
         if (error) {
-          setError(friendlyError(error.message));
+          setError(friendlyError(error.message, t));
         } else if (sent) {
           setEmailSent(true);
         }
-
       } else if (flow === 'forgot') {
         const { error } = await resetPassword(email);
         if (error) {
-          setError(friendlyError(error.message));
+          setError(friendlyError(error.message, t));
         } else {
           setResetSent(true);
         }
@@ -252,109 +200,63 @@ export default function Login() {
     }
   };
 
-  // ── Resend confirmation ────────────────────────────────────────────────────
   const handleResend = async () => {
     setResending(true);
     const { error } = await resendConfirmation(email);
     setResending(false);
     if (error) {
-      setError(friendlyError(error.message));
+      setError(friendlyError(error.message, t));
     } else {
-      setSuccessMsg('Email renvoyé ! Vérifiez votre boîte mail.');
+      setSuccessMsg(t('auth.emailResent'));
     }
   };
 
-  // ── Google Sign-In ─────────────────────────────────────────────────────────
   const handleGoogleSignIn = async () => {
     setSocialLoading(true);
     setError(null);
     const { error } = await signInWithGoogle();
     setSocialLoading(false);
-    if (error) setError('Connexion Google impossible. Réessayez.');
+    if (error) setError(t('auth.googleLoginFailed'));
   };
 
-  // ── Apple Sign-In ──────────────────────────────────────────────────────────
   const handleAppleSignIn = async () => {
     setAppleLoading(true);
     setError(null);
     const { error } = await signInWithApple();
     setAppleLoading(false);
     if (error && !error.message.includes('cancelled')) {
-      setError('Connexion Apple impossible. Réessayez.');
+      setError(t('auth.appleLoginFailed'));
     }
   };
-
-  // ── Loading (vérification session initiale) ────────────────────────────────
-  if (status === 'loading') {
-    return (
-      <View className="flex-1 bg-black items-center justify-center p-6">
-        <ActivityIndicator size="large" color="#60a5fa" />
-      </View>
-    );
-  }
 
   // ── Email envoyé (signup) ──────────────────────────────────────────────────
   if (emailSent) {
     return (
-      <View className="flex-1 bg-black items-center justify-center p-6">
-        {/* Icône */}
-        <View className="w-16 h-16 rounded-full items-center justify-center mb-4 bg-blue-500/10 border border-blue-500/20">
-          <MailCheck size={28} color="#60a5fa" />
+      <View className="center-content p-6">
+        <View className="w-16 h-16 rounded-full items-center justify-center mb-4 bg-blue-500/15 border border-blue-500/30">
+          <Icon name="mail-check-line" size={28} color="#60a5fa" />
         </View>
-
-        <Text className="text-xl font-bold text-white mb-2.5 text-center">
-          Vérifiez votre email
+        <Text className="text-xl font-bold text-white mb-2.5 text-center font-righteous">{t('authGuard.confirmYourEmail')}</Text>
+        <Text className="text-sm text-white/50 text-center leading-[22px] mb-6 font-dmsans">
+          {t('auth.confirmationEmailSent', { email })}
         </Text>
-        <Text className="text-sm text-zinc-500 text-center leading-[22px] mb-6">
-          Un lien de confirmation a été envoyé à{' '}
-          <Text className="text-white font-semibold">{email}</Text>.
-          {'\n'}Cliquez dessus pour activer votre compte.
-        </Text>
-
-        {/* Resend card */}
-        <View
-          className="bg-zinc-900 border border-zinc-800 rounded-[20px] p-5 gap-4 w-full"
-          style={{
-            shadowColor: '#000',
-            shadowOpacity: 0.3,
-            shadowRadius: 20,
-            shadowOffset: { width: 0, height: 8 },
-            elevation: 6,
-          }}
-        >
-          <Text className="text-xs text-zinc-500 text-center">
-            Vous n'avez rien reçu ?
-          </Text>
+        <View className="bg-surface-secondary border border-white/10 rounded-[20px] p-5 gap-4 w-full">
+          <Text className="text-xs text-white/50 text-center font-dmsans">{t('auth.resendEmail')}</Text>
           <TouchableOpacity
-            className={`border border-zinc-700 rounded-[10px] h-11 items-center justify-center px-4 ${resending ? 'opacity-60' : ''}`}
+            className={`border border-white/10 rounded-[10px] h-11 items-center justify-center px-4 ${resending ? 'opacity-60' : ''}`}
             onPress={handleResend}
             disabled={resending}
             activeOpacity={0.8}
           >
-            {resending
-              ? <ActivityIndicator size="small" color="#a1a1aa" />
-              : <Text className="text-zinc-400 text-[13px] font-medium">
-                Renvoyer l'email de confirmation
-              </Text>
-            }
+            {resending ? (
+              <Loader size={24} color="#a1a1aa" />
+            ) : (
+              <Text className="text-white/80 text-[13px] font-medium font-dmsans">{t('auth.resendEmail')}</Text>
+            )}
           </TouchableOpacity>
-
-          <FadeIn visible={!!successMsg}>
-            <View className="flex-row items-center gap-1.5 justify-center">
-              <CheckCircle2 size={14} color="#34d399" />
-              <Text className="text-emerald-400 text-xs">{successMsg}</Text>
-            </View>
-          </FadeIn>
-
-          <FadeIn visible={!!error}>
-            <Text className="text-red-400 text-xs text-center">{error}</Text>
-          </FadeIn>
         </View>
-
         <TouchableOpacity onPress={() => { setEmailSent(false); setFlow('signin'); }}>
-          <Text className="text-[13px] text-zinc-600 mt-4">
-            Retour à la connexion
-          </Text>
+          <Text className="text-[13px] text-white/50 mt-4 font-dmsans">{t('auth.backToLogin')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -363,109 +265,73 @@ export default function Login() {
   // ── Reset envoyé ───────────────────────────────────────────────────────────
   if (resetSent) {
     return (
-      <View className="flex-1 bg-black items-center justify-center p-6">
-        {/* Icône */}
-        <View className="w-16 h-16 rounded-full items-center justify-center mb-4 bg-emerald-500/10 border border-emerald-500/20">
-          <MailCheck size={28} color="#34d399" />
+      <View className="center-content p-6">
+        <View className="w-16 h-16 rounded-full items-center justify-center mb-4 bg-emerald-500/15 border border-emerald-500/30">
+          <Icon name="mail-send-line" size={28} color="#34d399" />
         </View>
-
-        <Text className="text-xl font-bold text-white mb-2.5 text-center">
-          Email envoyé !
+        <Text className="text-xl font-bold text-white mb-2.5 text-center font-righteous">{t('auth.passwordUpdated')}</Text>
+        <Text className="text-sm text-white/50 text-center leading-[22px] mb-6 font-dmsans">
+          {t('auth.passwordResetSent', { email })}
         </Text>
-        <Text className="text-sm text-zinc-500 text-center leading-[22px] mb-6">
-          Un lien de réinitialisation a été envoyé à{' '}
-          <Text className="text-white font-semibold">{email}</Text>.
-          {'\n'}Le lien expire dans 24 heures.
-        </Text>
-
         <TouchableOpacity onPress={() => { setResetSent(false); setFlow('signin'); }}>
-          <Text className="text-[13px] text-zinc-600 mt-4">
-            ← Retour à la connexion
-          </Text>
+          <Text className="text-[13px] font-dmsans-medium text-white/50 mt-4">← {t('auth.backToLogin')}</Text>
         </TouchableOpacity>
       </View>
     );
   }
 
-  // ── Form titles / subtitles ────────────────────────────────────────────────
+  // ── Form titles ─────────────────────────────────────────────────────────────
   const titles: Record<Flow, string> = {
-    signin: 'Bon retour 👋',
-    signup: 'Créer un compte',
-    forgot: 'Réinitialiser le mot de passe',
+    signin: t('auth.logIn'),
+    signup: t('auth.createAccount'),
+    forgot: t('auth.passwordRecovery'),
   };
 
   const subtitles: Record<Flow, string> = {
-    signin: 'Connectez-vous pour accéder à vos voyages.',
-    signup: 'Rejoignez-nous pour découvrir et planifier vos voyages.',
-    forgot: 'Entrez votre email pour recevoir un lien de réinitialisation.',
+    signin: t('auth.connectToAccess'),
+    signup: t('auth.joinUs'),
+    forgot: t('auth.enterEmailForReset'),
   };
 
-  // ── Main form ──────────────────────────────────────────────────────────────
+  // ── Main form ─────────────────────────────────────────────────────────────
   return (
-    <KeyboardAvoidingView
-      className="flex-1 bg-black"
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+    <SafeAreaView className="flex-1" edges={['top']}>
+      <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView
         contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 20, paddingBottom: 40 }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Logo / branding ── */}
+        {/* Logo */}
         <View className="items-center mb-7">
-          <View
-            className="w-[52px] h-[52px] rounded-[14px] bg-blue-600 items-center justify-center mb-[14px]"
-            style={{
-              shadowColor: '#2563eb',
-              shadowOpacity: 0.4,
-              shadowRadius: 12,
-              shadowOffset: { width: 0, height: 4 },
-              elevation: 8,
-            }}
-          >
-            <Text style={{ fontSize: 22 }}>✈️</Text>
-          </View>
-          <Text className="text-2xl font-bold text-white mb-1">{titles[flow]}</Text>
-          <Text className="text-[13px] text-zinc-500 text-center">{subtitles[flow]}</Text>
+          <Text className="text-2xl font-bold text-white mb-1 font-righteous">{titles[flow]}</Text>
+          <Text className="text-[13px] text-white/50 text-center font-dmsans">{subtitles[flow]}</Text>
         </View>
 
-        {/* ── Card ── */}
-        <View
-          className="bg-zinc-900 border border-zinc-800 rounded-[20px] p-5 gap-4"
-          style={{
-            shadowColor: '#000',
-            shadowOpacity: 0.3,
-            shadowRadius: 20,
-            shadowOffset: { width: 0, height: 8 },
-            elevation: 6,
-          }}
-        >
+        {/* Card */}
+        <View className="bg-surface-secondary border border-white/10 rounded-[20px] p-5 gap-4">
           {/* Success banner */}
-          <FadeIn visible={!!successMsg}>
-            <View className="flex-row items-start gap-[10px] rounded-[10px] px-[14px] py-3 bg-emerald-500/10 border border-emerald-500/20">
-              <CheckCircle2 size={16} color="#34d399" style={{ flexShrink: 0, marginTop: 1 }} />
-              <Text className="text-emerald-400 text-[13px] flex-1 leading-[18px]">{successMsg}</Text>
+          {successMsg && (
+            <View className="flex-row items-start gap-2.5 rounded-[10px] px-[14px] py-3 bg-emerald-500/10 border border-emerald-500/20">
+              <Icon name="checkbox-circle-line" size={16} color="#34d399" />
+              <Text className="text-emerald-400 text-[13px] flex-1 leading-[18px] font-dmsans">{successMsg}</Text>
             </View>
-          </FadeIn>
+          )}
 
           {/* Back arrow (forgot) */}
           {flow === 'forgot' && (
-            <TouchableOpacity
-              className="flex-row items-center gap-1.5"
-              onPress={() => setFlow('signin')}
-              activeOpacity={0.7}
-            >
-              <ArrowLeft size={14} color="#71717a" />
-              <Text className="text-xs text-zinc-500">Retour à la connexion</Text>
+            <TouchableOpacity className="flex-row items-center gap-1.5" onPress={() => setFlow('signin')} activeOpacity={0.7}>
+              <Icon name="arrow-left-line" size={14} color="#71717a" />
+              <Text className="label-micro">{t('auth.backToLogin')}</Text>
             </TouchableOpacity>
           )}
 
           {/* Email */}
           <Field
-            label="Email"
+            label={t('auth.emailLabel')}
             value={email}
             onChangeText={setEmail}
-            placeholder="vous@exemple.com"
+            placeholder={t('auth.emailPlaceholder')}
             keyboardType="email-address"
             autoComplete="email"
             error={!!error}
@@ -474,150 +340,129 @@ export default function Login() {
 
           {/* Password (sauf forgot) */}
           {flow !== 'forgot' && (
-            <View className="gap-1.5">
+            <View>
               <Field
-                label="Mot de passe"
+                label={t('auth.passwordLabel')}
                 value={password}
                 onChangeText={setPassword}
-                placeholder="••••••••"
+                placeholder={t('auth.passwordPlaceholder')}
                 secureTextEntry={!showPass}
                 autoComplete={flow === 'signup' ? 'new-password' : 'password'}
                 error={!!error}
                 suffix={
-                  <TouchableOpacity
-                    onPress={() => setShowPass((v) => !v)}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    activeOpacity={0.7}
-                  >
-                    {showPass
-                      ? <EyeOff size={18} color="#52525b" />
-                      : <Eye    size={18} color="#52525b" />
-                    }
+                  <TouchableOpacity onPress={() => setShowPass((v) => !v)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.7}>
+                    <Icon name={showPass ? 'eye-off-line' : 'eye-line'} size={18} color="rgba(255,255,255,0.3)" />
                   </TouchableOpacity>
                 }
               />
-              {/* Jauge de sécurité (signup seulement) */}
-              {flow === 'signup' && <PasswordStrength password={password} />}
+              {flow === 'signup' ? (
+                <View className="mt-2">
+                  <PasswordStrength password={password} email={email} t={t} />
+                </View>
+              ) : (
+                <TouchableOpacity onPress={() => setFlow('forgot')} activeOpacity={0.7} className="mt-2">
+                  <Text className="text-xs text-white/50 text-right font-dmsans">{t('auth.forgotPassword')}</Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
 
           {/* Error banner */}
-          <FadeIn visible={!!error}>
-            <View className="flex-row items-start gap-[10px] rounded-[10px] px-[14px] py-3 bg-red-500/10 border border-red-500/20">
-              <AlertCircle size={16} color="#f87171" style={{ flexShrink: 0, marginTop: 1 }} />
-              <Text className="text-red-400 text-[13px] flex-1 leading-[18px]">{error}</Text>
+          {error && (
+            <View className="flex-row items-start gap-2.5 rounded-[10px] px-[14px] py-3 bg-red-500/10 border border-red-500/20">
+              <Icon name={'alert-fill'} size={16} color="#f87171" />
+              <Text className="text-red-400 text-[13px] flex-1 leading-[18px] font-dmsans">{error}</Text>
             </View>
-          </FadeIn>
+          )}
 
           {/* Submit */}
-          <TouchableOpacity
-            className={`bg-blue-600 rounded-[10px] h-[46px] items-center justify-center mt-1 ${loading ? 'opacity-60' : ''}`}
-            style={{
-              shadowColor: '#2563eb',
-              shadowOpacity: 0.3,
-              shadowRadius: 10,
-              shadowOffset: { width: 0, height: 4 },
-              elevation: 4,
-            }}
+          <PrimaryButton
+            title={flow === 'signin' ? t('auth.signIn') : flow === 'signup' ? t('auth.createAccount') : t('auth.sendResetLink')}
             onPress={handleSubmit}
-            disabled={loading}
-            activeOpacity={0.85}
-          >
-            {loading
-              ? <ActivityIndicator size="small" color="#ffffff" />
-              : <Text className="text-white text-[15px] font-semibold">
-                {flow === 'signin' ? 'Se connecter'
-                  : flow === 'signup' ? 'Créer mon compte'
-                    : 'Envoyer le lien'}
-              </Text>
-            }
-          </TouchableOpacity>
+            loading={loading}
+            fullWidth
+          />
 
-          {/* ── Social login (signin + signup seulement) ── */}
+          {/* Social login (signin + signup) */}
           {flow !== 'forgot' && (
             <>
-              <View className="flex-row items-center gap-2.5">
-                <View className="flex-1 h-px bg-zinc-800" />
-                <Text className="text-zinc-700 text-xs">ou continuer avec</Text>
-                <View className="flex-1 h-px bg-zinc-800" />
-              </View>
-
               <TouchableOpacity
-                className={`flex-row items-center justify-center gap-3 border border-zinc-700 bg-zinc-900 rounded-[10px] h-[46px] ${socialLoading ? 'opacity-50' : ''}`}
+                className={`flex-row items-center justify-center gap-3 border border-white/10 bg-surface-secondary rounded-[10px] h-[46px] ${socialLoading ? 'opacity-50' : ''}`}
                 onPress={handleGoogleSignIn}
                 disabled={socialLoading || loading || appleLoading}
                 activeOpacity={0.8}
               >
-                {socialLoading
-                  ? <ActivityIndicator size="small" color="#a1a1aa" />
-                  : <>
-                      <Text style={{ fontSize: 16, fontWeight: '700', color: '#fff' }}>G</Text>
-                      <Text className="text-zinc-300 text-[15px] font-medium">Continuer avec Google</Text>
-                    </>
-                }
+                {socialLoading ? (
+                  <Loader size={24} color="#a1a1aa" />
+                ) : (
+                  <>
+                    <Icon name="google-fill" size={18} color="#fff" />
+                    <Text className="text-white/80 text-[15px] font-medium font-dmsans">{t('auth.continueWithGoogle')}</Text>
+                  </>
+                )}
               </TouchableOpacity>
 
-              {/* Apple Sign-In - Only shown on iOS devices that support it */}
               {appleAvailable && (
                 <TouchableOpacity
-                  className={`flex-row items-center justify-center gap-3 border border-zinc-700 bg-zinc-900 rounded-[10px] h-[46px] ${appleLoading ? 'opacity-50' : ''}`}
+                  className={`flex-row items-center justify-center gap-3 border border-white/10 bg-surface-secondary rounded-[10px] h-[46px] ${appleLoading ? 'opacity-50' : ''}`}
                   onPress={handleAppleSignIn}
                   disabled={appleLoading || loading || socialLoading}
                   activeOpacity={0.8}
                 >
-                  {appleLoading
-                    ? <ActivityIndicator size="small" color="#a1a1aa" />
-                    : <>
-                        <Text style={{ fontSize: 18, color: '#fff' }}></Text>
-                        <Text className="text-zinc-300 text-[15px] font-medium">Continuer avec Apple</Text>
-                      </>
-                  }
+                  {appleLoading ? (
+                    <Loader size={24} color="#a1a1aa" />
+                  ) : (
+                    <>
+                      <Icon name="apple-fill" size={18} color="#fff" />
+                      <Text className="text-white/80 text-[15px] font-medium font-dmsans">{t('auth.continueWithApple')}</Text>
+                    </>
+                  )}
                 </TouchableOpacity>
               )}
             </>
           )}
 
-          {/* ── Footer links ── */}
+          {/* Footer links */}
           <View className="gap-3">
             {flow === 'signin' && (
               <>
-                <TouchableOpacity onPress={() => setFlow('forgot')} activeOpacity={0.7}>
-                  <Text className="text-zinc-400 text-[13px] text-center">
-                    Mot de passe oublié ?
-                  </Text>
-                </TouchableOpacity>
-
                 <View className="flex-row items-center gap-2.5">
-                  <View className="flex-1 h-px bg-zinc-800" />
-                  <Text className="text-zinc-700 text-xs">ou</Text>
-                  <View className="flex-1 h-px bg-zinc-800" />
+                  <View className="flex-1 h-px bg-white/10" />
+                  <Text className="text-white/30 text-xs font-dmsans">{t('common.or')}</Text>
+                  <View className="flex-1 h-px bg-white/10" />
                 </View>
-
                 <TouchableOpacity onPress={() => setFlow('signup')} activeOpacity={0.7}>
-                  <Text className="text-zinc-400 text-[13px] text-center">
-                    Pas encore de compte ?{' '}
-                    <Text className="text-blue-400 font-semibold">S'inscrire</Text>
+                  <Text className="text-white/50 text-[13px] text-center font-dmsans">
+                    {t('auth.noAccount')}
+                    <Text className="text-blue-400 font-dmsans-semibold">{t('auth.signUp')}</Text>
                   </Text>
                 </TouchableOpacity>
               </>
             )}
-
             {flow === 'signup' && (
-              <TouchableOpacity onPress={() => setFlow('signin')} activeOpacity={0.7}>
-                <Text className="text-zinc-400 text-[13px] text-center">
-                  Déjà un compte ?{' '}
-                  <Text className="text-blue-400 font-semibold">Se connecter</Text>
-                </Text>
-              </TouchableOpacity>
+              <>
+                <View className="flex-row items-center gap-2.5">
+                  <View className="flex-1 h-px bg-white/10" />
+                  <Text className="text-white/30 text-xs font-dmsans">{t('common.or')}</Text>
+                  <View className="flex-1 h-px bg-white/10" />
+                </View>
+                <TouchableOpacity onPress={() => setFlow('signin')} activeOpacity={0.7}>
+                  <Text className="text-white/50 text-[13px] text-center font-dmsans">
+                    {t('auth.alreadyHaveAccount')}
+                    <Text className="text-blue-400 font-dmsans-semibold">{t('auth.signIn')}</Text>
+                  </Text>
+                </TouchableOpacity>
+              </>
             )}
           </View>
-        </View>
 
-        {/* ── Legal ── */}
-        <Text className="text-center text-[11px] text-zinc-700 mt-4">
-          En continuant, vous acceptez nos conditions d'utilisation.
-        </Text>
+          {/* legal */}
+          <Text className="text-center text-[11px] text-white/30 mt-4 font-dmsans">
+            {t('auth.termsAgreement')}
+          </Text>
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }

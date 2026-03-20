@@ -17,13 +17,11 @@ import {
   Alert,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import {
-  ArrowLeft, Check, MapPin, Loader2,
-  Star, Clock, ExternalLink, ChevronDown, ChevronUp,
-  Trash2, Pencil, X, Save, Plus,
-} from 'lucide-react-native';
+import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
+import Icon from 'react-native-remix-icon';
 import { isTripSaved, saveTrip, unsaveTrip } from '@/services/tripService';
+import { markNotificationsReadByEntity } from '@/services/notificationService';
 import { useAuth } from '@/context/AuthContext';
 import {
   fetchTripForReview,
@@ -34,7 +32,10 @@ import {
 } from '@/services/reviewService';
 import type { DbTrip, DbDay, DbSpot, SpotUpdatePayload } from '@/services/reviewService';
 import { Button } from '@/components/Button';
+import { PrimaryButton } from '@/components/PrimaryButton';
+import { SecondaryButton } from '@/components/SecondaryButton';
 import { AddCityToTripModal } from '@/components/trip/AddCityToTripModal';
+import Loader from "@/components/Loader";
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
@@ -44,6 +45,18 @@ const TYPE_EMOJI: Record<string, string> = {
   transport: '🚗', shopping: '🛍️', other: '📍',
 };
 
+// Map spot_type to SecondaryButton color scheme
+const SPOT_TYPE_TO_COLOR: Record<string, 'default' | 'restaurant' | 'culture' | 'nature' | 'shopping' | 'nightlife' | 'location' | 'mustsee'> = {
+  restaurant: 'restaurant',
+  bar: 'nightlife',
+  hotel: 'location',
+  attraction: 'culture',
+  activite: 'default',
+  activity: 'default',
+  shopping: 'shopping',
+  other: 'default',
+};
+
 const SPOT_TYPES = [
   'restaurant', 'bar', 'hotel', 'attraction',
   'activite', 'transport', 'shopping', 'other',
@@ -51,27 +64,33 @@ const SPOT_TYPES = [
 
 const PRICE_OPTIONS = ['gratuit', '€', '€€', '€€€', '€€€€'] as const;
 
-const PRICE_LABEL: Record<string, string> = {
-  gratuit: '🆓 Gratuit', '€': '€ Budget',
-  '€€': '€€ Modéré', '€€€': '€€€ Cher', '€€€€': '€€€€ Luxe',
+const getPriceLabel = (price: string, t: (key: string) => string): string => {
+  switch (price) {
+    case 'gratuit': return `${t('spotReview.free')}`;
+    case '€': return `${price}`;
+    case '€€': return `${price}`;
+    case '€€€': return `${price}`;
+    case '€€€€': return `${price}`;
+    default: return price;
+  }
 };
 
-// ── SpinningLoader ─────────────────────────────────────────────────────────────
+const getSpotTypeLabel = (type: string, t: (key: string) => string): string => {
+  switch (type) {
+    case 'restaurant': return `${type_emoji('restaurant')} ${t('spotReview.restaurant')}`;
+    case 'bar': return `${type_emoji('bar')} ${t('spotReview.bar')}`;
+    case 'hotel': return `${type_emoji('hotel')} ${t('spotReview.hotel')}`;
+    case 'attraction': return `${type_emoji('attraction')} ${t('spotReview.attraction')}`;
+    case 'activite': return `${type_emoji('activite')} ${t('spotReview.activity')}`;
+    case 'activity': return `${type_emoji('activity')} ${t('spotReview.activity')}`;
+    case 'transport': return `${type_emoji('transport')} ${t('spotReview.transport')}`;
+    case 'shopping': return `${type_emoji('shopping')} ${t('spotReview.shopping')}`;
+    case 'other': return `${type_emoji('other')} ${t('spotReview.other')}`;
+    default: return type;
+  }
+};
 
-function SpinningLoader({ size = 16, color = '#60a5fa' }: { size?: number; color?: string }) {
-  const rotation = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.loop(
-      Animated.timing(rotation, { toValue: 1, duration: 1000, easing: Easing.linear, useNativeDriver: true })
-    ).start();
-  }, []);
-  const spin = rotation.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
-  return (
-    <Animated.View style={{ transform: [{ rotate: spin }] }}>
-      <Loader2 size={size} color={color} />
-    </Animated.View>
-  );
-}
+const type_emoji = (type: string): string => TYPE_EMOJI[type] ?? '📍';
 
 // ── SpotReviewCard ────────────────────────────────────────────────────────────
 
@@ -79,9 +98,10 @@ interface SpotReviewCardProps {
   spot: DbSpot;
   onUpdate: (payload: SpotUpdatePayload) => void;
   onDelete: () => void;
+  t: (key: string, options?: Record<string, unknown>) => string;
 }
 
-function SpotReviewCard({ spot, onUpdate, onDelete }: SpotReviewCardProps) {
+function SpotReviewCard({ spot, onUpdate, onDelete, t }: SpotReviewCardProps) {
   const [isEditing,  setIsEditing]  = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
   const [saving,     setSaving]     = useState(false);
@@ -117,72 +137,74 @@ function SpotReviewCard({ spot, onUpdate, onDelete }: SpotReviewCardProps) {
     setIsEditing(false);
   };
 
-  // web: bg-yellow-500/5 border-yellow-500/20 si highlight, sinon bg-zinc-800/50 border-zinc-700/50
-  const cardBg     = spot.highlight ? '#eab3080D' : '#27272a80';
-  const cardBorder = spot.highlight ? '#eab30833' : '#3f3f4680';
+  // Glassmorphism: highlight → bg-yellow-500/5 border-yellow-500/20, sinon bg-white/10 border-white/10
+  const cardBg     = spot.highlight ? 'rgba(234,179,8,0.05)' : 'rgba(255,255,255,0.1)';
+  const cardBorder = spot.highlight ? 'rgba(234,179,8,0.2)' : 'rgba(255,255,255,0.1)';
 
   if (!isEditing) {
     return (
       <View className="rounded-lg p-2.5" style={{ backgroundColor: cardBg, borderWidth: 1, borderColor: cardBorder }}>
         <View className="flex-row items-start gap-2">
-          <Text style={{ fontSize: 16 }}>{TYPE_EMOJI[spot.spot_type ?? ''] ?? '📍'}</Text>
-          <View className="flex-1 min-w-0">
+          <Text className="font-dmsans" style={{ fontSize: 16 }}>{TYPE_EMOJI[spot.spot_type ?? ''] ?? '📍'}</Text>
+          <View className="flex-min-width">
             {/* Nom + actions */}
             <View className="flex-row items-center justify-between gap-1">
-              <View className="flex-row items-center gap-1 flex-1 min-w-0">
-                <Text className="text-white font-medium flex-shrink-1" numberOfLines={1}>{spot.name}</Text>
-                {spot.highlight && <Star size={12} color="#facc15" fill="#facc15" />}
+              <View className="flex-row items-center gap-1 flex-min-width">
+                <Text className="text-white font-dmsans-semibold text-sm flex-shrink-1" numberOfLines={1}>{spot.name}</Text>
+                {spot.highlight && <Icon name={'star-fill'} size={12} color="#facc15" fill="#facc15" />}
               </View>
               <View className="flex-row items-center gap-1 flex-shrink-0">
                 {canOpen && (
                   <TouchableOpacity onPress={openMap} className="p-1" hitSlop={4}>
-                    <ExternalLink size={12} color="#71717a" />
+                    <Icon name="navigation-line" size={12} color="rgba(255,255,255,0.5)" />
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity onPress={() => { setIsEditing(true); setConfirmDel(false); }} className="p-1" hitSlop={4}>
-                  <Pencil size={12} color="#71717a" />
+                  <Icon name={'pencil-fill'} size={12} color="rgba(255,255,255,0.5)" />
                 </TouchableOpacity>
                 {confirmDel ? (
                   <View className="flex-row items-center gap-1">
-                    <TouchableOpacity
+                    <SecondaryButton
+                      title={t('spotReview.confirm')}
+                      size="sm"
                       onPress={onDelete}
-                      className="px-1.5 py-0.5 rounded"
-                      style={{ backgroundColor: '#dc2626' }}
-                    >
-                      <Text style={{ fontSize: 12, color: '#fff' }}>Confirmer</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => setConfirmDel(false)} className="p-1" hitSlop={4}>
-                      <X size={12} color="#71717a" />
-                    </TouchableOpacity>
+                    />
+                    <SecondaryButton
+                      title=""
+                      variant="pill"
+                      size="sm"
+                      leftIcon="close-line"
+                      onPress={() => setConfirmDel(false)}
+                    />
                   </View>
                 ) : (
                   <TouchableOpacity onPress={() => setConfirmDel(true)} className="p-1" hitSlop={4}>
-                    <Trash2 size={12} color="#71717a" />
+                    <Icon name={'delete-bin-2-fill'} size={12} color="rgba(255, 144, 144, 0.4)" />
                   </TouchableOpacity>
                 )}
               </View>
             </View>
 
             {spot.address && (
-              <Text className="text-xs text-zinc-500 mt-0.5" numberOfLines={1}>{spot.address}</Text>
+              <Text className="text-xs text-white/50 mt-0.5 font-dmsans" numberOfLines={1}>{spot.address}</Text>
             )}
 
-            <View className="flex-row items-center gap-2 mt-1 flex-wrap">
+            <View className="row-center mt-1 flex-wrap">
               {!!spot.duration_minutes && (
                 <View className="flex-row items-center gap-0.5">
-                  <Clock size={12} color="#71717a" />
-                  <Text className="text-xs text-zinc-500">{spot.duration_minutes}min</Text>
+                  <Icon name={'time-line'} size={12} color="rgba(255,255,255,0.5)" />
+                  <Text className="label-micro">{spot.duration_minutes}{t('spotReview.min')}</Text>
                 </View>
               )}
               {spot.price_range && (
-                <Text className="text-xs text-green-400">
-                  {PRICE_LABEL[spot.price_range] ?? spot.price_range}
+                <Text className="text-xs text-green-400 font-dmsans">
+                  {getPriceLabel(spot.price_range, t)}
                 </Text>
               )}
             </View>
 
             {spot.tips && (
-              <Text className="text-xs text-blue-300 italic mt-1">💡 {spot.tips}</Text>
+              <Text className="text-xs text-blue-300 italic mt-1 font-dmsans">💡 {spot.tips}</Text>
             )}
           </View>
         </View>
@@ -196,37 +218,32 @@ function SpotReviewCard({ spot, onUpdate, onDelete }: SpotReviewCardProps) {
 
       {/* Nom */}
       <View>
-        <Text style={{ fontSize: 10, color: '#71717a', textTransform: 'uppercase', letterSpacing: 0.5 }}>Nom</Text>
+        <Text className="text-[10px] text-white/50 uppercase tracking-widest font-dmsans" style={{ fontSize: 10 }}>{t('spotReview.name')}</Text>
         <TextInput
           value={form.name ?? ''}
           onChangeText={(v) => setForm((f) => ({ ...f, name: v }))}
           className="mt-0.5 rounded-lg px-2.5 py-1.5 text-sm text-white"
-          style={{ backgroundColor: '#3f3f4680', borderWidth: 1, borderColor: '#52525b' }}
-          placeholderTextColor="#71717a"
+          style={{ backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}
+          placeholderTextColor="rgba(255,255,255,0.3)"
         />
       </View>
 
       {/* Type + Prix */}
       <View className="flex-row gap-2">
         <View className="flex-1">
-          <Text style={{ fontSize: 10, color: '#71717a', textTransform: 'uppercase', letterSpacing: 0.5 }}>Type</Text>
+          <Text className="text-[10px] text-white/50 uppercase tracking-widest font-dmsans" style={{ fontSize: 10 }}>{t('spotReview.type')}</Text>
           {/* Picker simplifié — ScrollView horizontal des options */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-0.5" contentContainerStyle={{ gap: 4 }}>
-            {SPOT_TYPES.map((t) => (
-              <TouchableOpacity
-                key={t}
-                onPress={() => setForm((f) => ({ ...f, spot_type: t }))}
-                className="px-2 py-1 rounded-lg"
-                style={{
-                  backgroundColor: form.spot_type === t ? '#3b82f633' : '#3f3f4680',
-                  borderWidth: 1,
-                  borderColor: form.spot_type === t ? '#3b82f64D' : '#52525b',
-                }}
-              >
-                <Text style={{ fontSize: 12, color: form.spot_type === t ? '#93c5fd' : '#a1a1aa' }}>
-                  {TYPE_EMOJI[t]} {t}
-                </Text>
-              </TouchableOpacity>
+            {SPOT_TYPES.map((spotType) => (
+              <SecondaryButton
+                key={spotType}
+                title={getSpotTypeLabel(spotType, t)}
+                active={form.spot_type === spotType}
+                variant="pill"
+                size="sm"
+                colorScheme={SPOT_TYPE_TO_COLOR[spotType]}
+                onPress={() => setForm((f) => ({ ...f, spot_type: spotType }))}
+              />
             ))}
           </ScrollView>
         </View>
@@ -234,102 +251,90 @@ function SpotReviewCard({ spot, onUpdate, onDelete }: SpotReviewCardProps) {
 
       {/* Prix */}
       <View>
-        <Text style={{ fontSize: 10, color: '#71717a', textTransform: 'uppercase', letterSpacing: 0.5 }}>Prix</Text>
+        <Text className="text-[10px] text-white/50 uppercase tracking-widest font-dmsans" style={{ fontSize: 10 }}>{t('spotReview.price')}</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-0.5" contentContainerStyle={{ gap: 4 }}>
           {PRICE_OPTIONS.map((p) => (
-            <TouchableOpacity
+            <SecondaryButton
               key={p}
+              title={getPriceLabel(p, t)}
+              active={form.price_range === p}
+              variant="pill"
+              size="sm"
               onPress={() => setForm((f) => ({ ...f, price_range: p }))}
-              className="px-2 py-1 rounded-lg"
-              style={{
-                backgroundColor: form.price_range === p ? '#3b82f633' : '#3f3f4680',
-                borderWidth: 1,
-                borderColor: form.price_range === p ? '#3b82f64D' : '#52525b',
-              }}
-            >
-              <Text style={{ fontSize: 12, color: form.price_range === p ? '#93c5fd' : '#a1a1aa' }}>{p}</Text>
-            </TouchableOpacity>
+            />
           ))}
         </ScrollView>
       </View>
 
       {/* Adresse */}
       <View>
-        <Text style={{ fontSize: 10, color: '#71717a', textTransform: 'uppercase', letterSpacing: 0.5 }}>Adresse</Text>
+        <Text className="text-[10px] text-white/50 uppercase tracking-widest font-dmsans" style={{ fontSize: 10 }}>{t('spotReview.address')}</Text>
         <TextInput
           value={form.address ?? ''}
           onChangeText={(v) => setForm((f) => ({ ...f, address: v || null }))}
-          placeholder="Optionnel"
-          placeholderTextColor="#71717a"
+          placeholder={t('spotReview.optional')}
+          placeholderTextColor="rgba(255,255,255,0.3)"
           className="mt-0.5 rounded-lg px-2.5 py-1.5 text-sm text-white"
-          style={{ backgroundColor: '#3f3f4680', borderWidth: 1, borderColor: '#52525b' }}
+          style={{ backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}
         />
       </View>
 
       {/* Durée */}
       <View>
-        <Text style={{ fontSize: 10, color: '#71717a', textTransform: 'uppercase', letterSpacing: 0.5 }}>Durée (min)</Text>
+        <Text className="text-[10px] text-white/50 uppercase tracking-widest font-dmsans" style={{ fontSize: 10 }}>{t('spotReview.duration')}</Text>
         <TextInput
           value={form.duration_minutes != null ? String(form.duration_minutes) : ''}
           onChangeText={(v) => setForm((f) => ({ ...f, duration_minutes: v ? Number(v) : null }))}
-          placeholder="Optionnel"
-          placeholderTextColor="#71717a"
+          placeholder={t('spotReview.optional')}
+          placeholderTextColor="rgba(255,255,255,0.3)"
           keyboardType="numeric"
           className="mt-0.5 rounded-lg px-2.5 py-1.5 text-sm text-white"
-          style={{ backgroundColor: '#3f3f4680', borderWidth: 1, borderColor: '#52525b' }}
+          style={{ backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}
         />
       </View>
 
       {/* Conseil */}
       <View>
-        <Text style={{ fontSize: 10, color: '#71717a', textTransform: 'uppercase', letterSpacing: 0.5 }}>Conseil</Text>
+        <Text className="text-[10px] text-white/50 uppercase tracking-widest font-dmsans" style={{ fontSize: 10 }}>{t('spotReview.tip')}</Text>
         <TextInput
           value={form.tips ?? ''}
           onChangeText={(v) => setForm((f) => ({ ...f, tips: v || null }))}
-          placeholder="Optionnel"
-          placeholderTextColor="#71717a"
+          placeholder={t('spotReview.optional')}
+          placeholderTextColor="rgba(255,255,255,0.3)"
           multiline
           numberOfLines={2}
           className="mt-0.5 rounded-lg px-2.5 py-1.5 text-sm text-white"
-          style={{ backgroundColor: '#3f3f4680', borderWidth: 1, borderColor: '#52525b', textAlignVertical: 'top' }}
+          style={{ backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', textAlignVertical: 'top' }}
         />
       </View>
 
       {/* Highlight toggle */}
-      <TouchableOpacity
+      <SecondaryButton
+        title={t('spotReview.favorite')}
+        active={form.highlight}
+        variant="pill"
+        size="sm"
+        colorScheme="mustsee"
+        leftIcon={form.highlight ? 'star-fill' : 'star-line'}
         onPress={() => setForm((f) => ({ ...f, highlight: !f.highlight }))}
-        className="flex-row items-center gap-2 px-2.5 py-1.5 rounded-lg self-start"
-        style={{
-          backgroundColor: form.highlight ? '#eab3081A' : '#3f3f4680',
-          borderWidth: 1,
-          borderColor: form.highlight ? '#eab3084D' : '#52525b',
-        }}
-      >
-        <Star size={12} color={form.highlight ? '#facc15' : '#71717a'} fill={form.highlight ? '#facc15' : 'none'} />
-        <Text style={{ fontSize: 12, color: form.highlight ? '#fde68a' : '#71717a' }}>Coup de cœur</Text>
-      </TouchableOpacity>
+      />
 
       {/* Actions */}
       <View className="flex-row gap-2 pt-1">
-        <TouchableOpacity
+        <PrimaryButton
+          title={t('spotReview.save')}
+          leftIcon="save-line"
           onPress={handleSave}
-          disabled={saving}
-          className="flex-1 flex-row items-center justify-center gap-1 py-1.5 rounded-lg"
-          style={{ backgroundColor: '#2563eb' }}
-        >
-          {saving
-            ? <SpinningLoader size={12} color="#fff" />
-            : <Save size={12} color="#fff" />}
-          <Text style={{ fontSize: 12, color: '#fff', fontWeight: '500' }}>Enregistrer</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
+          loading={saving}
+          size="sm"
+          fullWidth
+        />
+        <SecondaryButton
+          title={t('spotReview.cancel')}
+          variant="pill"
+          size="sm"
           onPress={() => setIsEditing(false)}
-          className="flex-row items-center gap-1 px-3 py-1.5 rounded-lg"
-          style={{ backgroundColor: '#3f3f4680' }}
-        >
-          <X size={12} color="#a1a1aa" />
-          <Text style={{ fontSize: 12, color: '#a1a1aa' }}>Annuler</Text>
-        </TouchableOpacity>
+        />
       </View>
     </View>
   );
@@ -344,9 +349,10 @@ interface DayReviewCardProps {
   onValidatedChange: (validated: boolean) => void;
   onSpotUpdate: (spotId: string, payload: SpotUpdatePayload) => void;
   onSpotDelete: (spotId: string) => void;
+  t: (key: string, options?: Record<string, unknown>) => string;
 }
 
-function DayReviewCard({ day, isExpanded, onToggle, onValidatedChange, onSpotUpdate, onSpotDelete }: DayReviewCardProps) {
+function DayReviewCard({ day, isExpanded, onToggle, onValidatedChange, onSpotUpdate, onSpotDelete, t }: DayReviewCardProps) {
   const included = day.validated;
 
   // Animation expand/collapse — web: motion.div height 0→auto opacity 0→1
@@ -369,19 +375,15 @@ function DayReviewCard({ day, isExpanded, onToggle, onValidatedChange, onSpotUpd
     }
   }, [isExpanded, included]);
 
-  // web: included → bg-zinc-900 border-zinc-800, excluded → bg-zinc-900/30 border-zinc-800/40
-  const cardBg     = included ? '#18181b' : '#18181b4D';
-  const cardBorder = included ? '#27272a' : '#27272a66';
-  // web: barre latérale bg-blue-500 si inclus, transparent sinon
-  const barColor   = included ? '#3b82f6' : 'transparent';
-  // web: numéro bg-blue-500/20 border-blue-500/30 texte blue-400, sinon bg-zinc-800/40 texte zinc-600
-  const numBg      = included ? '#3b82f633' : '#27272a66';
-  const numBorder  = included ? '#3b82f64D' : '#3f3f4680';
-  const numColor   = included ? '#60a5fa' : '#52525b';
-  // web: toggle pill : inclus → bg-blue-500/15 text-blue-400 border-blue-500/30, sinon bg-zinc-800/80 text-zinc-500
-  const toggleBg     = included ? '#3b82f626' : '#27272acc';
-  const toggleBorder = included ? '#3b82f64D' : '#3f3f46';
-  const toggleColor  = included ? '#60a5fa'   : '#71717a';
+  // Glassmorphism: included → bg-surface-secondary border-white/10, excluded → bg-surface-secondary/30 border-white/5
+  const cardBg     = included ? '#1e1a64' : '#1e1a644D';
+  const cardBorder = included ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.05)';
+  // Barre latérale colorée: accent violet si inclus, transparent sinon
+  const barColor   = included ? '#a855f7' : 'transparent';
+  // Numéro: bg-white/10 border-white/10 texte white/60, sinon bg-white/5 texte white/30
+  const numBg      = included ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.05)';
+  const numBorder  = included ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.05)';
+  const numColor   = included ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.3)';
 
   return (
     <View className="rounded-xl overflow-hidden" style={{ borderWidth: 1, borderColor: cardBorder, backgroundColor: cardBg }}>
@@ -389,7 +391,7 @@ function DayReviewCard({ day, isExpanded, onToggle, onValidatedChange, onSpotUpd
         {/* Barre latérale colorée */}
         <View style={{ width: 2, backgroundColor: barColor }} />
 
-        <View className="flex-1 min-w-0">
+        <View className="flex-min-width">
           {/* Header */}
           <View className="flex-row items-center px-3 py-3 gap-3">
 
@@ -398,52 +400,48 @@ function DayReviewCard({ day, isExpanded, onToggle, onValidatedChange, onSpotUpd
               className="w-8 h-8 rounded-full items-center justify-center flex-shrink-0"
               style={{ backgroundColor: numBg, borderWidth: 1, borderColor: numBorder }}
             >
-              <Text style={{ fontSize: 14, fontWeight: '700', color: numColor }}>{day.day_number}</Text>
+              <Text className="font-righteous" style={{ fontSize: 14, fontWeight: '700', color: numColor }}>{day.day_number}</Text>
             </View>
 
             {/* Localisation — cliquable pour déplier si inclus */}
             <TouchableOpacity
               onPress={included ? onToggle : undefined}
               disabled={!included}
-              className="flex-1 min-w-0"
+              className="flex-min-width"
             >
               <Text
-                className="text-sm font-medium"
+                className="font-righteous text-sm"
                 numberOfLines={1}
                 style={{
-                  color: included ? '#ffffff' : '#52525b',
+                  color: included ? '#FAFAFF' : 'rgba(255,255,255,0.3)',
                   textDecorationLine: included ? 'none' : 'line-through',
                 }}
               >
-                {day.location ?? `Jour ${day.day_number}`}
+                {day.location ?? t('dayReview.day', { number: day.day_number })}
               </Text>
               {included && day.spots.length > 0 && (
-                <Text className="text-xs text-zinc-600 mt-0.5">
-                  {day.spots.length} lieu{day.spots.length > 1 ? 'x' : ''}
+                <Text className="text-xs text-white/70 mt-0.5 font-dmsans">
+                  {day.spots.length} {day.spots.length > 1 ? t('dayReview.places') : t('dayReview.place')}
                 </Text>
               )}
             </TouchableOpacity>
 
             {/* Actions droite : toggle pill + chevron */}
-            <View className="flex-row items-center gap-2 flex-shrink-0">
-              <TouchableOpacity
+            <View className="row-center flex-shrink-0">
+              <SecondaryButton
+                title={included ? t('dayReview.included') : t('dayReview.include')}
+                active={included}
+                variant="pill"
+                size="sm"
                 onPress={() => onValidatedChange(!included)}
-                className="flex-row items-center gap-1.5 px-3 py-1 rounded-full"
-                style={{ backgroundColor: toggleBg, borderWidth: 1, borderColor: toggleBorder }}
-              >
-                {included
-                  ? <Check size={12} color={toggleColor} />
-                  : <Plus  size={12} color={toggleColor} />}
-                <Text style={{ fontSize: 12, fontWeight: '500', color: toggleColor }}>
-                  {included ? 'Inclus' : 'Inclure'}
-                </Text>
-              </TouchableOpacity>
+                leftIcon={included ? 'check-line' : 'add-line'}
+              />
 
               {included && (
                 <TouchableOpacity onPress={onToggle} className="p-0.5" hitSlop={6}>
                   {isExpanded
-                    ? <ChevronUp   size={16} color="#71717a" />
-                    : <ChevronDown size={16} color="#71717a" />}
+                    ? <Icon name={'arrow-up-s-line'}   size={16} color="rgba(255,255,255,0.5)" />
+                    : <Icon name={'arrow-down-s-line'} size={16} color="rgba(255,255,255,0.5)" />}
                 </TouchableOpacity>
               )}
             </View>
@@ -456,11 +454,11 @@ function DayReviewCard({ day, isExpanded, onToggle, onValidatedChange, onSpotUpd
             >
               <View
                 className="p-3 gap-2"
-                style={{ borderTopWidth: 1, borderTopColor: '#27272a99' }}
+                style={{ borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)' }}
               >
                 {day.spots.length === 0 ? (
-                  <Text className="text-xs text-zinc-600 text-center py-2 italic">
-                    Aucun lieu pour ce jour.
+                  <Text className="text-xs text-white/70 text-center py-2 italic font-dmsans">
+                    {t('dayReview.noPlaceForDay')}
                   </Text>
                 ) : (
                   day.spots.map((spot) => (
@@ -469,24 +467,25 @@ function DayReviewCard({ day, isExpanded, onToggle, onValidatedChange, onSpotUpd
                       spot={spot}
                       onUpdate={(payload) => onSpotUpdate(spot.id, payload)}
                       onDelete={() => onSpotDelete(spot.id)}
+                      t={t}
                     />
                   ))
                 )}
 
                 {/* Repas — web: breakfast/lunch/dinner */}
                 {(day.breakfast_spot || day.lunch_spot || day.dinner_spot) && (
-                  <View className="pt-2 gap-1" style={{ borderTopWidth: 1, borderTopColor: '#27272a99' }}>
-                    {day.breakfast_spot && <Text className="text-xs text-zinc-400">🌅 {day.breakfast_spot}</Text>}
-                    {day.lunch_spot     && <Text className="text-xs text-zinc-400">☀️ {day.lunch_spot}</Text>}
-                    {day.dinner_spot    && <Text className="text-xs text-zinc-400">🌙 {day.dinner_spot}</Text>}
+                  <View className="pt-2 gap-1" style={{ borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)' }}>
+                    {day.breakfast_spot && <Text className="text-xs text-body-muted">🌅 {day.breakfast_spot}</Text>}
+                    {day.lunch_spot     && <Text className="text-xs text-body-muted">☀️ {day.lunch_spot}</Text>}
+                    {day.dinner_spot    && <Text className="text-xs text-body-muted">🌙 {day.dinner_spot}</Text>}
                   </View>
                 )}
 
                 {/* Hébergement */}
                 {day.accommodation_name && (
                   <Text
-                    className="text-xs text-zinc-500 pt-2"
-                    style={{ borderTopWidth: 1, borderTopColor: '#27272a99' }}
+                    className="text-xs text-white/50 pt-2 font-dmsans"
+                    style={{ borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)' }}
                   >
                     🏨 {day.accommodation_name}
                   </Text>
@@ -506,6 +505,7 @@ export default function ReviewModePage() {
   const router = useRouter();
   const { tripId } = useLocalSearchParams<{ tripId: string }>();
   const { user } = useAuth();
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
 
   const [trip,        setTrip]       = useState<DbTrip | null>(null);
@@ -517,6 +517,8 @@ export default function ReviewModePage() {
 
   useEffect(() => {
     if (!tripId) return;
+    // Marquer les notifications liées comme lues
+    markNotificationsReadByEntity('trip', tripId);
     fetchTripForReview(tripId).then((t) => {
       setTrip(t);
       setLoading(false);
@@ -617,11 +619,10 @@ export default function ReviewModePage() {
         await syncDestinations(trip.id);
         await saveTrip(user.id, trip.id);
         setIsSaved(true);
-        // Rediriger vers la liste des trips après sauvegarde
         router.replace('/(tabs)/trips');
       }
     } catch (err: any) {
-      Alert.alert('Erreur', err.message);
+      Alert.alert(t('tripReview.error'), err.message);
     } finally {
       setValidating(false);
     }
@@ -631,17 +632,17 @@ export default function ReviewModePage() {
 
   if (loading) {
     return (
-      <View className="flex-1 bg-black items-center justify-center">
-        <SpinningLoader size={32} color="#60a5fa" />
+      <View className="center-content">
+        <Loader size={32} color="#60a5fa" />
       </View>
     );
   }
 
   if (!trip) {
     return (
-      <View className="flex-1 bg-black items-center justify-center gap-4">
-        <Text className="text-zinc-400">Voyage introuvable</Text>
-        <Button onPress={() => router.back()}>Retour</Button>
+      <View className="center-content gap-4">
+        <Text className="text-body-muted">{t('review.tripNotFound')}</Text>
+        <Button onPress={() => router.back()}>{t('review.back')}</Button>
       </View>
     );
   }
@@ -652,20 +653,14 @@ export default function ReviewModePage() {
   const totalSpots     = validatedDays.reduce((n, d) => n + d.spots.length, 0);
   const progressPct    = totalDays > 0 ? Math.round((validatedCount / totalDays) * 100) : 0;
 
-  // Footer button : 3 états comme le web
-  const footerBg = isSaved
-    ? '#b91c1c'     // red-700
-    : validatedCount === 0
-      ? '#3f3f46'   // zinc-700
-      : '#16a34a';  // green-600
 
   return (
-    <View className="flex-1 bg-black">
+    <View className="flex-1">
 
       {/* ── Header ── */}
-      {/* web: sticky bg-zinc-900/95 backdrop-blur border-b border-zinc-800 */}
+      {/* web: sticky bg-surface-secondary/95 backdrop-blur border-b border-white/10 */}
       <View
-        className="bg-zinc-900 px-4 py-4"
+        className="bg-surface-secondary px-4 py-4"
         style={{ paddingTop: insets.top + 16, borderBottomWidth: 1, borderBottomColor: '#27272a' }}
       >
         <View className="flex-row items-center gap-3">
@@ -674,15 +669,15 @@ export default function ReviewModePage() {
             style={{ padding: 8 }}
           >
             <View pointerEvents="none">
-              <ArrowLeft size={24} color="#a1a1aa" />
+              <Icon name={'arrow-left-s-line'} size={24} color="#a1a1aa" />
             </View>
           </Pressable>
-          <View className="flex-1 min-w-0">
-            <Text className="text-lg font-bold text-white" numberOfLines={1}>{trip.trip_title}</Text>
+          <View className="flex-min-width">
+            <Text className="title-lg-bold" numberOfLines={1}>{trip.trip_title}</Text>
             <View className="flex-row items-center gap-1 mt-0.5">
-              <MapPin size={12} color="#71717a" />
-              <Text className="text-sm text-zinc-400">
-                {trip.destination} · {trip.duration_days} jours
+              <Icon name={'map-pin-2-line'} size={12} color="#71717a" />
+              <Text className="text-sm text-body-muted">
+                {trip.destination} · {trip.duration_days} {t('tripReview.days')}
               </Text>
             </View>
           </View>
@@ -694,39 +689,39 @@ export default function ReviewModePage() {
         {/* ── Résumé trip ── */}
         {/* web: badges vibe/duration/isSaved + creator handle + source_url */}
         <View
-          className="bg-zinc-900 rounded-xl p-4 gap-2"
+          className="bg-surface-secondary rounded-xl p-4 gap-2"
           style={{ borderWidth: 1, borderColor: '#27272a' }}
         >
           {/* Badges */}
           <View className="flex-row flex-wrap gap-2">
             {trip.vibe && (
               <View
-                className="px-2 py-0.5 rounded-full"
-                style={{ backgroundColor: '#a855f733', borderWidth: 1, borderColor: '#a855f74D' }}
+                className="pill-small"
+                style={{ backgroundColor: 'rgba(168,85,247,0.2)', borderWidth: 1, borderColor: 'rgba(168,85,247,0.3)' }}
               >
-                <Text style={{ fontSize: 12, color: '#d8b4fe' }}>{trip.vibe}</Text>
+                <Text className="font-dmsans" style={{ fontSize: 12, color: '#d8b4fe' }}>{trip.vibe}</Text>
               </View>
             )}
             <View
-              className="px-2 py-0.5 rounded-full"
-              style={{ backgroundColor: '#27272a', borderWidth: 1, borderColor: '#3f3f46' }}
+              className="pill-small"
+              style={{ backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}
             >
-              <Text style={{ fontSize: 12, color: '#d4d4d8' }}>{trip.duration_days} jours</Text>
+              <Text className="font-dmsans" style={{ fontSize: 12, color: '#d4d4d8' }}>{trip.duration_days} {t('tripReview.days')}</Text>
             </View>
             {isSaved && (
               <View
-                className="px-2 py-0.5 rounded-full"
-                style={{ backgroundColor: '#22c55e33', borderWidth: 1, borderColor: '#22c55e4D' }}
+                className="pill-small"
+                style={{ backgroundColor: 'rgba(34,197,94,0.2)', borderWidth: 1, borderColor: 'rgba(34,197,94,0.3)' }}
               >
-                <Text style={{ fontSize: 12, color: '#86efac' }}>✓ Déjà sauvegardé</Text>
+                <Text className="font-dmsans" style={{ fontSize: 12, color: '#86efac' }}>{t('review.alreadySaved')}</Text>
               </View>
             )}
           </View>
 
           {/* Créateur */}
           {trip.content_creator_handle && (
-            <Text className="text-xs text-zinc-500">
-              📹 Créateur : <Text className="text-zinc-400">@{trip.content_creator_handle}</Text>
+            <Text className="label-micro">
+              📹 {t('tripReview.creator')} <Text className="text-body-muted">@{trip.content_creator_handle}</Text>
             </Text>
           )}
 
@@ -736,25 +731,25 @@ export default function ReviewModePage() {
               onPress={() => Linking.openURL(trip.source_url)}
               className="flex-row items-center gap-1"
             >
-              <Text className="text-xs text-blue-400">Voir la vidéo originale</Text>
-              <ExternalLink size={12} color="#60a5fa" />
+              <Text className="text-xs text-blue-400 font-dmsans">{t('review.viewOriginalVideo')}</Text>
+              <Icon name={'external-link-line'} size={12} color="#60a5fa" />
             </TouchableOpacity>
           )}
         </View>
 
         {/* ── Panneau sélection ── */}
         <View
-          className="bg-zinc-900 rounded-xl p-4"
-          style={{ borderWidth: 1, borderColor: '#27272a' }}
+          className="bg-surface-secondary rounded-xl p-4"
+          style={{ borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}
         >
           {/* Titre + bulk actions */}
           <View className="flex-row items-start justify-between gap-3 mb-3">
             <View>
-              <Text className="text-sm font-semibold text-white">Sélectionne tes jours</Text>
-              <Text className="text-xs text-zinc-500 mt-0.5">
+              <Text className=" text-white font-righteous">{t('tripReview.selectDays')}</Text>
+              <Text className="text-xs text-white/50 mt-0.5 font-dmsans">
                 {validatedCount === 0
-                  ? 'Aucun jour sélectionné'
-                  : `${validatedCount} jour${validatedCount > 1 ? 's' : ''} · ${totalSpots} lieu${totalSpots > 1 ? 'x' : ''}`}
+                  ? t('tripReview.noDaySelected')
+                  : t('tripReview.daySelected', { count: validatedCount, spots: totalSpots, plural: validatedCount > 1 ? 's' : '' })}
               </Text>
             </View>
             <View className="flex-row gap-1.5 flex-shrink-0">
@@ -763,16 +758,16 @@ export default function ReviewModePage() {
                 onPress={() => setShowAddCityModal(true)}
                 className="flex-row items-center gap-1 px-2.5 py-1 rounded-lg"
                 style={{
-                  backgroundColor: '#a855f71A',
+                  backgroundColor: 'rgba(168,85,247,0.1)',
                   borderWidth: 1,
-                  borderColor: '#a855f74D',
+                  borderColor: 'rgba(168,85,247,0.3)',
                 }}
               >
-                <Plus size={12} color="#a855f7" />
-                <Text style={{ fontSize: 12, color: '#a855f7' }}>Ville</Text>
+                <Icon name={'add-fill'} size={12} color="#a855f7" />
+                <Text className="font-dmsans-semibold" style={{ fontSize: 12, color: '#a855f7' }}>{t('tripReview.addCity')}</Text>
               </TouchableOpacity>
-              {(['Tout', 'Aucun'] as const).map((label) => {
-                const isAll = label === 'Tout';
+              {([t('tripReview.allDays'), t('tripReview.noDays')] as const).map((label) => {
+                const isAll = label === t('tripReview.allDays');
                 const disabled = isAll ? validatedCount === totalDays : validatedCount === 0;
                 return (
                   <TouchableOpacity
@@ -781,13 +776,13 @@ export default function ReviewModePage() {
                     disabled={disabled}
                     className="px-2.5 py-1 rounded-lg"
                     style={{
-                      backgroundColor: '#27272a',
+                      backgroundColor: 'rgba(255,255,255,0.1)',
                       borderWidth: 1,
-                      borderColor: '#3f3f46',
+                      borderColor: 'rgba(255,255,255,0.1)',
                       opacity: disabled ? 0.3 : 1,
                     }}
                   >
-                    <Text style={{ fontSize: 12, color: '#a1a1aa' }}>{label}</Text>
+                    <Text className="font-dmsans-semibold" style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>{label}</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -795,35 +790,25 @@ export default function ReviewModePage() {
           </View>
 
           {/* Barre de progression — web: motion.div width animée */}
-          <View className="h-1 bg-zinc-800 rounded-full overflow-hidden mb-3">
+          <View className="h-1 bg-white/10 rounded-full overflow-hidden mb-3">
             <View
               className="h-full rounded-full"
-              style={{ width: `${progressPct}%`, backgroundColor: '#3b82f6' }}
+              style={{ width: `${progressPct}%`, backgroundColor: '#a855f7' }}
             />
           </View>
 
           {/* Pills des jours */}
           <View className="flex-row flex-wrap gap-1.5">
             {trip.days.map((day) => (
-              <TouchableOpacity
+              <SecondaryButton
                 key={day.id}
+                title={t('dayReview.dayNumber', { number: day.day_number })}
+                active={day.validated}
+                variant="pill"
+                size="sm"
                 onPress={() => handleDayValidated(day.id, !day.validated)}
-                className="flex-row items-center gap-1 px-2.5 py-1 rounded-full"
-                style={{
-                  backgroundColor: day.validated ? '#3b82f633' : '#27272a',
-                  borderWidth: 1,
-                  borderColor: day.validated ? '#3b82f64D' : '#3f3f46',
-                }}
-              >
-                {day.validated && <Check size={10} color="#93c5fd" />}
-                <Text style={{
-                  fontSize: 12,
-                  fontWeight: '500',
-                  color: day.validated ? '#93c5fd' : '#71717a',
-                }}>
-                  J{day.day_number}
-                </Text>
-              </TouchableOpacity>
+                leftIcon={'check-line'}
+              />
             ))}
           </View>
         </View>
@@ -839,6 +824,7 @@ export default function ReviewModePage() {
               onValidatedChange={(v) => handleDayValidated(day.id, v)}
               onSpotUpdate={(spotId, payload) => handleSpotUpdate(day.id, spotId, payload)}
               onSpotDelete={(spotId) => handleSpotDelete(day.id, spotId)}
+              t={t}
             />
           ))}
         </View>
@@ -847,36 +833,35 @@ export default function ReviewModePage() {
       {/* ── Footer sticky ── */}
       {/* web: fixed bottom-16 — 3 états: validating / isSaved→retirer / vide / sauvegarder */}
       <View
-        className="absolute bottom-0 left-0 right-0 px-4 py-4 bg-black"
-        style={{ borderTopWidth: 1, borderTopColor: '#27272a' }}
+        className="absolute left-0 right-0 bottom-0 px-4 py-4 bg-bg-primary"
+        style={{ paddingBottom: insets.bottom, borderTopWidth: 2, borderTopColor: 'rgba(255,255,255,0.1)' }}
       >
-        <TouchableOpacity
-          onPress={handleValidate}
-          disabled={validating || validatedCount === 0}
-          className="w-full flex-row items-center justify-center gap-2 py-3 rounded-xl"
-          style={{ backgroundColor: footerBg, opacity: validatedCount === 0 && !isSaved ? 0.6 : 1 }}
-        >
-          {validating ? (
-            <>
-              <SpinningLoader size={16} color="#fff" />
-              <Text style={{ color: '#fff', fontWeight: '500' }}>Chargement…</Text>
-            </>
-          ) : isSaved ? (
-            <>
-              <Trash2 size={16} color="#fff" />
-              <Text style={{ color: '#fff', fontWeight: '500' }}>Retirer de ma collection</Text>
-            </>
-          ) : validatedCount === 0 ? (
-            <Text style={{ color: '#fff', fontWeight: '500' }}>Sélectionne au moins un jour</Text>
-          ) : (
-            <>
-              <Check size={16} color="#fff" />
-              <Text style={{ color: '#fff', fontWeight: '500' }}>
-                Sauvegarder {validatedCount} jour{validatedCount > 1 ? 's' : ''}
-              </Text>
-            </>
-          )}
-        </TouchableOpacity>
+        {isSaved ? (
+          <PrimaryButton
+            title={t('tripReview.removeFromCollection')}
+            leftIcon="delete-bin-line"
+            onPress={handleValidate}
+            loading={validating}
+            color="purple"
+            fullWidth
+          />
+        ) : validatedCount === 0 ? (
+          <PrimaryButton
+            title={t('tripReview.selectAtLeastOneDay')}
+            leftIcon="information-line"
+            onPress={() => {}}
+            disabled
+            fullWidth
+          />
+        ) : (
+          <PrimaryButton
+            title={t('tripReview.saveDay', { count: validatedCount, plural: validatedCount > 1 ? 's' : '' })}
+            leftIcon="check-line"
+            onPress={handleValidate}
+            loading={validating}
+            fullWidth
+          />
+        )}
       </View>
 
       {/* Add City Modal */}

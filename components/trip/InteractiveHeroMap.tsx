@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, Animated, Easing } from 'react-native';
+import { View, Text, Animated, Easing } from 'react-native';
 import MapView, { Marker, Polyline, Callout, Region } from 'react-native-maps';
-import { Loader2 } from 'lucide-react-native';
 import { Destination } from '@/types/api';
 import { normalizeTextForLocationIQAPI, updateDestinationCoordinates } from '@/services/tripService';
+import Loader from "@/components/Loader";
 
 type GeocodingResult = {
   coords: [number, number];
@@ -34,17 +34,18 @@ function SpinningLoader({ size = 24, color = '#3b82f6' }: { size?: number; color
   const spin = rotation.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
 
   return (
-    <Animated.View style={{ transform: [{ rotate: spin }] }}>
-      <Loader2 size={size} color={color} />
+    <Animated.View>
+      <Loader size={size} color={color} />
     </Animated.View>
   );
 }
 
 interface InteractiveHeroMapProps {
   destinations: Destination[];
+  highlightedCity?: string | null;
 }
 
-export function InteractiveHeroMap({ destinations }: InteractiveHeroMapProps) {
+export function InteractiveHeroMap({ destinations, highlightedCity }: InteractiveHeroMapProps) {
   const [results, setResults] = useState<GeocodingResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [region, setRegion] = useState<Region>({
@@ -55,6 +56,18 @@ export function InteractiveHeroMap({ destinations }: InteractiveHeroMapProps) {
   });
   const mapRef = useRef<MapView>(null);
   const hasFetched = useRef(false);
+
+  // Center map on highlighted city
+  useEffect(() => {
+    if (!highlightedCity || !mapRef.current) return;
+    const match = results.find(
+      r => r.destination.city?.toLowerCase() === highlightedCity.toLowerCase()
+    );
+    if (!match) return;
+    mapRef.current.animateCamera({
+      center: { latitude: match.coords[0], longitude: match.coords[1] },
+    }, { duration: 600 });
+  }, [highlightedCity, results]);
 
   async function geocodeLocation(
     query: string,
@@ -180,7 +193,7 @@ export function InteractiveHeroMap({ destinations }: InteractiveHeroMapProps) {
         const maxLat = Math.max(...lats);
         const minLon = Math.min(...lons);
         const maxLon = Math.max(...lons);
-        
+
         setRegion({
           latitude: (minLat + maxLat) / 2,
           longitude: (minLon + maxLon) / 2,
@@ -202,7 +215,7 @@ export function InteractiveHeroMap({ destinations }: InteractiveHeroMapProps) {
     return (
       <View className="flex-1 flex-col items-center justify-center bg-zinc-950 gap-2">
         <SpinningLoader size={24} color="#3b82f6" />
-        <Text className="text-zinc-500 text-xs">Calcul de l'itinéraire...</Text>
+        <Text className="text-muted-micro">Calcul de l'itinéraire...</Text>
       </View>
     );
   }
@@ -210,13 +223,13 @@ export function InteractiveHeroMap({ destinations }: InteractiveHeroMapProps) {
   if (results.length === 0) {
     return (
       <View className="flex-1 items-center justify-center bg-zinc-950">
-        <Text className="text-zinc-500 text-xs">Impossible de localiser les étapes.</Text>
+        <Text className="text-muted-micro">Impossible de localiser les étapes.</Text>
       </View>
     );
   }
 
   return (
-    <View style={{ height: 288, width: '100%', position: 'relative' }}>
+    <View style={{ flex: 1, width: '100%', position: 'relative' }}>
       <MapView
         ref={mapRef}
         style={{ flex: 1, width: '100%', height: '100%' }}
@@ -236,49 +249,69 @@ export function InteractiveHeroMap({ destinations }: InteractiveHeroMapProps) {
           />
         )}
 
-        {results.map((result, idx) => (
-          <Marker
-            key={`marker-${idx}`}
-            coordinate={{ latitude: result.coords[0], longitude: result.coords[1] }}
-            anchor={{ x: 0.5, y: 1 }}
-          >
-            <View style={{ alignItems: 'center' }}>
-              <View 
-                style={{ 
-                  width: 28, 
-                  height: 28, 
-                  borderRadius: 14, 
-                  alignItems: 'center', 
-                  justifyContent: 'center', 
-                  borderWidth: 2, 
-                  borderColor: '#fff',
-                  backgroundColor: MARKER_COLORS[result.confidence] 
-                }}
-              >
-                <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>
-                  {result.destination.visit_order}
-                </Text>
-              </View>
-            </View>
-            <Callout tooltip>
-              <View style={{ backgroundColor: '#18181b', borderRadius: 8, padding: 12, minWidth: 150, maxWidth: 250 }}>
-                <Text style={{ color: '#fff', fontWeight: '600', fontSize: 14 }}>
-                  Étape {result.destination.visit_order} : {result.destination.city}
-                </Text>
-                {result.destination.country && (
-                  <Text style={{ color: '#a1a1aa', fontSize: 12, marginTop: 4 }}>
-                    {result.destination.country}
+        {results.map((result, idx) => {
+          const isHighlighted = highlightedCity != null &&
+            result.destination.city?.toLowerCase() === highlightedCity.toLowerCase();
+
+          return (
+            <Marker
+              key={`marker-${idx}`}
+              coordinate={{ latitude: result.coords[0], longitude: result.coords[1] }}
+              anchor={{ x: 0.5, y: 1 }}
+              zIndex={isHighlighted ? 10 : 1}
+            >
+              <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                {/* Glow ring — visible only when highlighted */}
+                {isHighlighted && (
+                  <View style={{
+                    position: 'absolute',
+                    width: 52,
+                    height: 52,
+                    borderRadius: 26,
+                    backgroundColor: 'rgba(82, 72, 212, 0.25)',
+                    borderWidth: 1.5,
+                    borderColor: 'rgba(82, 72, 212, 0.6)',
+                    top: -12,
+                    left: -12,
+                  }} />
+                )}
+                <View
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 14,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderWidth: 2,
+                    borderColor: '#fff',
+                    backgroundColor: isHighlighted ? '#5248D4' : MARKER_COLORS[result.confidence],
+                  }}
+                >
+                  <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>
+                    {result.destination.visit_order}
                   </Text>
-                )}
-                {result.confidence === 'low' && (
-                  <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#3f3f46' }}>
-                    <Text style={{ color: '#f59e0b', fontSize: 11 }}>⚠️ Position approximative</Text>
-                  </View>
-                )}
+                </View>
               </View>
-            </Callout>
-          </Marker>
-        ))}
+              <Callout tooltip>
+                <View style={{ backgroundColor: '#18181b', borderRadius: 8, padding: 12, minWidth: 150, maxWidth: 250 }}>
+                  <Text style={{ color: '#fff', fontWeight: '600', fontSize: 14 }}>
+                    Étape {result.destination.visit_order} : {result.destination.city}
+                  </Text>
+                  {result.destination.country && (
+                    <Text style={{ color: '#a1a1aa', fontSize: 12, marginTop: 4 }}>
+                      {result.destination.country}
+                    </Text>
+                  )}
+                  {result.confidence === 'low' && (
+                    <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#3f3f46' }}>
+                      <Text style={{ color: '#f59e0b', fontSize: 11 }}>⚠️ Position approximative</Text>
+                    </View>
+                  )}
+                </View>
+              </Callout>
+            </Marker>
+          );
+        })}
       </MapView>
 
       <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 64, backgroundColor: 'transparent', pointerEvents: 'none' }} />

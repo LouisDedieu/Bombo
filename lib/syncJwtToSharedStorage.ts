@@ -1,6 +1,20 @@
 import * as SecureStore from 'expo-secure-store';
 import { supabase } from './supabase';
 
+export async function clearJwtFromSharedStorage(): Promise<void> {
+  try {
+    await SecureStore.deleteItemAsync('supabase_jwt', {
+      accessGroup: 'group.com.onedaytravel.mobile.shared',
+    });
+    await SecureStore.deleteItemAsync('supabase_user_id', {
+      accessGroup: 'group.com.onedaytravel.mobile.shared',
+    });
+    console.log('[syncJwt] Cleared JWT from shared storage');
+  } catch (e: any) {
+    console.log('[syncJwt] Error clearing:', e?.message || e);
+  }
+}
+
 export async function syncJwtToSharedStorage(): Promise<void> {
   try {
     const {

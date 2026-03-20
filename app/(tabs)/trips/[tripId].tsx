@@ -3,69 +3,33 @@
  * Complete refactor with NativeWind, preserving all React source features
  */
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  ActivityIndicator,
-  Linking,
-  Image,
-  ActionSheetIOS,
-  Platform,
-  Alert,
-} from 'react-native';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import DraggableFlatList, {
-  NestableScrollContainer,
-  NestableDraggableFlatList,
-  ScaleDecorator,
-  RenderItemParams,
-} from 'react-native-draggable-flatlist';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
-import { InteractiveHeroMap } from '@/components/InteractiveHeroMap';
-import {
-  MapPin,
-  ExternalLink,
-  Star,
-  Clock,
-  DollarSign,
-  Globe,
-  ChevronDown,
-  ChevronUp,
-  ChevronLeft,
-  CalendarDays,
-  Truck,
-  Info,
-  Utensils,
-  BedDouble,
-  AlertTriangle,
-  Lightbulb,
-  Package,
-  Smartphone,
-  Navigation,
-  Wifi,
-  Shield,
-  TrendingDown,
-  Coffee,
-  Sun,
-  Moon,
-  Camera,
-  Plus,
-  Building2,
-  GripVertical,
-  Check,
-  Trash2,
-  X,
-} from 'lucide-react-native';
-import { getTrip } from '@/services/tripService';
-import { getUserSavedCities } from '@/services/cityService';
-import { useAuth } from '@/context/AuthContext';
-import { Destination } from '@/types/api';
-import { AddCityToTripModal } from '@/components/trip/AddCityToTripModal';
-import type { DbDay as ReviewDbDay } from '@/services/reviewService';
-import { reorderDestinations, deleteDestination } from '@/services/reviewService';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {Alert, Animated, Dimensions, Image, ImageBackground, Text, TouchableOpacity, View,} from 'react-native';
+import {LinearGradient} from 'expo-linear-gradient';
+import MaskedView from '@react-native-masked-view/masked-view';
+import Loader from '@/components/Loader';
+import {GestureHandlerRootView} from 'react-native-gesture-handler';
+import DraggableFlatList, {RenderItemParams, ScaleDecorator,} from 'react-native-draggable-flatlist';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {useFocusEffect, useLocalSearchParams, useRouter} from 'expo-router';
+import {useTranslation} from 'react-i18next';
+import {InteractiveHeroMap} from '@/components/trip/InteractiveHeroMap';
+import {getTrip} from '@/services/tripService';
+import {getUserSavedCities} from '@/services/cityService';
+import {useAuth} from '@/context/AuthContext';
+import {Destination} from '@/types/api';
+import {AddCityToTripModal} from '@/components/trip/AddCityToTripModal';
+import type {DbDay as ReviewDbDay} from '@/services/reviewService';
+import {deleteDestination, reorderDestinations} from '@/services/reviewService';
+import {Navbar} from '@/components/navigation/Navbar';
+import {Pill} from '@/components/Pill';
+import {SecondaryButton} from '@/components/SecondaryButton';
+import {type CategoryType, type DayData, TripStepCard} from '@/components/TripStepCard';
+import {PrimaryButton} from '@/components/PrimaryButton';
+import {TripBudgetCard} from '@/components/trip/TripBudgetCard';
+import {PracticalCard} from '@/components/PracticalCard';
+import {TransportCard} from '@/components/TransportCard';
+import Icon from "react-native-remix-icon";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -169,40 +133,25 @@ interface FullTrip {
 // Constants
 // ─────────────────────────────────────────────────────────────────────────────
 
-const SPOT_EMOJI: Record<string, string> = {
-  restaurant: '🍽️', bar: '🍷', hotel: '🏨', attraction: '🏛️',
-  activite: '🎯', activity: '🎯', transport: '🚗', shopping: '🛍️',
-  museum: '🏛️', beach: '🏖️', park: '🌳', viewpoint: '🔭',
-  cafe: '☕', market: '🛒', nightlife: '🎶', spa: '💆', other: '📍',
-};
-
-const TRANSPORT_CONFIG: Record<string, { emoji: string; label: string }> = {
-  plane: { emoji: '✈️', label: 'Vol' },
-  train: { emoji: '🚆', label: 'Train' },
-  bus: { emoji: '🚌', label: 'Bus' },
-  car: { emoji: '🚗', label: 'Voiture' },
-  ferry: { emoji: '⛴️', label: 'Ferry' },
-  walk: { emoji: '🚶', label: 'À pied' },
-  taxi: { emoji: '🚕', label: 'Taxi' },
-  metro: { emoji: '🚇', label: 'Métro' },
-  bike: { emoji: '🚲', label: 'Vélo' },
-  boat: { emoji: '🛥️', label: 'Bateau' },
-};
-
-const PRICE_CONFIG: Record<string, { label: string; color: string }> = {
-  gratuit: { label: 'Gratuit', color: 'text-emerald-400' },
-  '€': { label: 'Budget', color: 'text-green-400' },
-  '€€': { label: 'Modéré', color: 'text-yellow-400' },
-  '€€€': { label: 'Cher', color: 'text-orange-400' },
-  '€€€€': { label: 'Luxe', color: 'text-red-400' },
-};
-
 const SEASON_EMOJI: Record<string, string> = {
   spring: '🌸', summer: '☀️', autumn: '🍂', fall: '🍂', winter: '❄️',
   'all year': '🌍', printemps: '🌸', été: '☀️', automne: '🍂', hiver: '❄️',
 };
 
 type Tab = 'itinerary' | 'budget' | 'practical' | 'logistics';
+
+// Helper function to map spot_type to CategoryType
+function mapSpotTypeToCategory(spotType: string | null): CategoryType {
+  if (!spotType) return 'other';
+  const type = spotType.toLowerCase();
+  if (['restaurant', 'cafe', 'bar', 'food', 'bakery', 'coffee'].some(t => type.includes(t))) return 'food';
+  if (['museum', 'attraction', 'monument', 'temple', 'church', 'historic', 'cultural'].some(t => type.includes(t))) return 'culture';
+  if (['nightlife', 'club', 'disco', 'party'].some(t => type.includes(t))) return 'nightlife';
+  if (['shopping', 'market', 'mall', 'store', 'shop'].some(t => type.includes(t))) return 'shopping';
+  if (['park', 'garden', 'nature', 'hike', 'mountain', 'forest', 'trail'].some(t => type.includes(t))) return 'nature';
+  if (['beach', 'sea', 'ocean', 'coast', 'island'].some(t => type.includes(t))) return 'beach';
+  return 'other';
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Main Component
@@ -218,16 +167,79 @@ export default function TripDetailPage() {
   const { tripId } = useLocalSearchParams<{ tripId: string }>();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const { t } = useTranslation();
 
   const [trip, setTrip] = useState<FullTrip | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('itinerary');
-  const [expandedDay, setExpandedDay] = useState<number>(1);
   const [showAddCityModal, setShowAddCityModal] = useState(false);
   const [savedCitiesMap, setSavedCitiesMap] = useState<SavedCityMap>({});
   const [isEditingOrder, setIsEditingOrder] = useState(false);
   const [pendingDestinations, setPendingDestinations] = useState<Destination[]>([]);
   const [isSavingOrder, setIsSavingOrder] = useState(false);
+  const [isMapExpanded, setIsMapExpanded] = useState(false);
+  const [highlightedCity, setHighlightedCity] = useState<string | null>(null);
+
+  const SCREEN_HEIGHT = Dimensions.get('window').height;
+  const MAP_DEFAULT_HEIGHT = 300;
+  const MAP_EXPANDED_HEIGHT = SCREEN_HEIGHT - 120; // leave room for status bar + close button
+
+  const mapExpandAnim = useRef(new Animated.Value(MAP_DEFAULT_HEIGHT)).current;
+  const mapGradientOpacity = useRef(new Animated.Value(1)).current;
+
+  const toggleMapExpanded = useCallback(() => {
+    const expanding = !isMapExpanded;
+    setIsMapExpanded(expanding);
+    Animated.parallel([
+      Animated.spring(mapExpandAnim, {
+        toValue: expanding ? MAP_EXPANDED_HEIGHT : MAP_DEFAULT_HEIGHT,
+        damping: 20,
+        stiffness: 120,
+        mass: 0.8,
+        useNativeDriver: false,
+      }),
+      Animated.timing(mapGradientOpacity, {
+        toValue: expanding ? 0 : 1,
+        duration: 250,
+        useNativeDriver: false,
+      }),
+    ]).start();
+  }, [isMapExpanded, MAP_EXPANDED_HEIGHT]);
+
+  // Animated.event connecte directement le scroll à scrollY (pas de JS intermédiaire).
+  // Une seule valeur suffit — useNativeDriver: false car 'height' n'est pas supporté native.
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const outerScrollRef = useRef<Animated.ScrollView>(null);
+  const [headerHeight, setHeaderHeight] = useState(620);
+  const headerMeasured = useRef(false);
+
+  const COLLAPSIBLE_HEIGHT = 90;
+  const COLLAPSE_RANGE = 90;
+
+  const vibeAndStatsOpacity = scrollY.interpolate({
+    inputRange: [0, COLLAPSE_RANGE / 2],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
+
+  const vibeAndStatsTranslateY = scrollY.interpolate({
+    inputRange: [0, COLLAPSE_RANGE],
+    outputRange: [0, -15],
+    extrapolate: 'clamp',
+  });
+
+  const vibeAndStatsHeight = scrollY.interpolate({
+    inputRange: [0, COLLAPSE_RANGE],
+    outputRange: [COLLAPSIBLE_HEIGHT, 0],
+    extrapolate: 'clamp',
+  });
+
+  // Le top du ScrollView suit la réduction du header (collapse de COLLAPSIBLE_HEIGHT px)
+  const scrollContainerTop = scrollY.interpolate({
+    inputRange: [0, COLLAPSE_RANGE],
+    outputRange: [headerHeight, headerHeight - COLLAPSIBLE_HEIGHT],
+    extrapolate: 'clamp',
+  });
 
   const loadTrip = useCallback((showLoading = false) => {
     if (!tripId) return;
@@ -270,7 +282,7 @@ export default function TripDetailPage() {
   }, [user?.id]);
 
   // Helper to find saved city ID by destination city name
-  const getSavedCityId = (cityName: string | undefined): string | null => {
+  const getSavedCityId = (cityName: string | null | undefined): string | null => {
     if (!cityName) return null;
     return savedCitiesMap[cityName.toLowerCase()] || null;
   };
@@ -304,7 +316,7 @@ export default function TripDetailPage() {
   const confirmOrder = useCallback(async () => {
     if (!tripId) return;
     if (pendingDestinations.length === 0) {
-      Alert.alert('Attention', "L'itinéraire doit contenir au moins une ville.");
+      Alert.alert(t('tripDetail.attention'), t('tripDetail.itineraryMustHaveCity'));
       return;
     }
     setIsSavingOrder(true);
@@ -326,8 +338,8 @@ export default function TripDetailPage() {
       setPendingDestinations([]);
     } catch (err) {
       console.error('[confirmOrder] Error:', err);
-      const message = err instanceof Error ? err.message : 'Erreur inconnue';
-      Alert.alert('Erreur', `Impossible de sauvegarder: ${message}`);
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      Alert.alert(t('tripDetail.error'), t('tripDetail.cannotSave', { message }));
     } finally {
       setIsSavingOrder(false);
     }
@@ -335,710 +347,484 @@ export default function TripDetailPage() {
 
   if (loading) {
     return (
-      <View className="flex-1 bg-black items-center justify-center" style={{ paddingTop: insets.top }}>
-        <ActivityIndicator size="large" color="#60a5fa" />
-      </View>
+      <ImageBackground
+        source={require('@/assets/images/bg-gradient.png')}
+        className="flex-1"
+        resizeMode="cover"
+      >
+        <View className="center-content" style={{ paddingTop: insets.top }}>
+          <Loader size={48} />
+        </View>
+      </ImageBackground>
     );
   }
 
   if (!trip || !derived) {
     return (
-      <View className="flex-1 bg-black items-center justify-center px-4" style={{ paddingTop: insets.top }}>
-        <Text className="text-zinc-400 text-sm mb-4">Voyage introuvable.</Text>
-        <TouchableOpacity
-          onPress={() => router.replace('/(tabs)/trips')}
-          className="bg-zinc-800 px-6 py-3 rounded-lg"
-        >
-          <Text className="text-white font-medium">Mes voyages</Text>
-        </TouchableOpacity>
-      </View>
+      <ImageBackground
+        source={require('@/assets/images/bg-gradient.png')}
+        className="flex-1"
+        resizeMode="cover"
+      >
+        <View className="center-content px-4" style={{ paddingTop: insets.top }}>
+          <Text className="text-zinc-400 text-sm mb-4 font-dmsans">{t('tripDetail.tripNotFound')}</Text>
+          <TouchableOpacity
+            onPress={() => router.replace('/(tabs)/trips')}
+            className="bg-zinc-800 px-6 py-3 rounded-lg"
+          >
+            <Text className="text-label">{t('tripDetail.myTrips')}</Text>
+          </TouchableOpacity>
+        </View>
+      </ImageBackground>
     );
   }
 
-  const { destinations, days, logistics, budget, practical, totalSpots, highlights, destLabel, seasonEmoji } = derived;
-
-  const TABS: { id: Tab; label: string; icon: React.ReactNode; count?: number }[] = [
-    { id: 'itinerary', label: 'Itinéraire', icon: <CalendarDays size={14} color="#60a5fa" />, count: days.length },
-    { id: 'budget', label: 'Budget', icon: <DollarSign size={14} color="#60a5fa" /> },
-    { id: 'practical', label: 'Pratique', icon: <Globe size={14} color="#60a5fa" /> },
-    { id: 'logistics', label: 'Transport', icon: <Truck size={14} color="#60a5fa" />, count: logistics.length },
-  ];
+  const { destinations, days, logistics, budget, practical, totalSpots } = derived;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-    <View className="flex-1 bg-black">
-      {/* ════════════════════════════════════════════
-          HEADER STICKY
-      ════════════════════════════════════════════ */}
-      <View className="bg-zinc-950/95 border-b border-zinc-800/80" style={{ paddingTop: insets.top }}>
-        <View className="max-w-2xl mx-auto px-4 py-3 flex-row items-center gap-3">
-          <TouchableOpacity onPress={() => router.back()} className="flex-row items-center -ml-1">
-            <ChevronLeft size={22} color="#a1a1aa" />
-          </TouchableOpacity>
-
-          <View className="flex-1 min-w-0">
-            <Text className="text-base font-bold text-white" numberOfLines={1}>
-              {trip.trip_title}
-            </Text>
-
-            <View className="flex-row items-center gap-1 mt-0.5 mb-1">
-              <MapPin size={12} color="#60a5fa" />
-              <Text className="text-xs text-zinc-500" numberOfLines={1}>{destLabel}</Text>
-            </View>
-
-            <View className="flex-row flex-wrap gap-1.5">
-              {trip.vibe && (
-                <View className="bg-blue-500/20 border border-blue-500/30 rounded-full px-2 py-0.5">
-                  <Text className="text-blue-300 text-[10px]">✨ {trip.vibe}</Text>
-                </View>
-              )}
-              {trip.best_season && (
-                <View className="bg-blue-500/40 border border-blue-400/30 rounded-full px-2 py-0.5">
-                  <Text className="text-blue-200 text-[10px]">{seasonEmoji} {trip.best_season}</Text>
-                </View>
-              )}
-            </View>
-          </View>
-
-          {trip.source_url && (
-            <TouchableOpacity onPress={() => Linking.openURL(trip.source_url!)} className="p-2">
-              <ExternalLink size={16} color="#71717a" />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Tabs */}
-        <View className="max-w-2xl mx-auto px-4 flex-row border-t border-zinc-800/60">
-          {TABS.map((tab) => (
-            <TouchableOpacity
-              key={tab.id}
-              onPress={() => setActiveTab(tab.id)}
-              className={`flex-1 flex-row items-center justify-center gap-1.5 py-2.5 border-b-2 ${
-                activeTab === tab.id ? 'border-blue-500' : 'border-transparent'
-              }`}
-            >
-              {tab.icon}
-              <Text className={`text-xs font-medium ${
-                activeTab === tab.id ? 'text-blue-400' : 'text-zinc-500'
-              }`}>
-                {tab.label}
-              </Text>
-              {tab.count !== undefined && (
-                <View className={`rounded-full px-1 min-w-[16px] ${
-                  activeTab === tab.id ? 'bg-blue-500/20' : 'bg-zinc-800'
-                }`}>
-                  <Text className={`text-[10px] text-center ${
-                    activeTab === tab.id ? 'text-blue-300' : 'text-zinc-500'
-                  }`}>
-                    {tab.count}
-                  </Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-
-      {/* ════════════════════════════════════════════
-          CONTENT BY TAB
-      ════════════════════════════════════════════ */}
-      <NestableScrollContainer
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}
+      <ImageBackground
+        source={require('@/assets/images/bg-gradient.png')}
+        className="flex-1"
+        resizeMode="cover"
       >
+        {/* ════════════════════════════════════════════
+          FLOATING BACK BUTTON
+      ════════════════════════════════════════════ */}
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={{
+            position: 'absolute',
+            top: insets.top + 12,
+            left: 16,
+            zIndex: 50,
+            width: 40,
+            height: 40,
+            borderRadius: 20,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            alignItems: 'center',
+            justifyContent: 'center',
+            paddingRight: 2
+          }}
+        >
+          <Icon name={"arrow-left-s-line"} size={24} color="#fff" />
+        </TouchableOpacity>
 
-        {/* ─────────────────── ITINERARY ─────────────────── */}
-        {activeTab === 'itinerary' && (
-          <View className="gap-3 pb-6 px-4">
-            {/* HERO - Map with destinations */}
-            <View className="h-72 mt-3 rounded-xl overflow-hidden border border-zinc-800 bg-zinc-950">
-              {destinations.length > 0 ? (
-                <InteractiveHeroMap destinations={destinations} />
-              ) : (
-                <View className="w-full h-full relative">
-                  <Image
-                    source={{ uri: trip.thumbnail_url || 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=800' }}
-                    className="w-full h-full opacity-60"
-                    resizeMode="cover"
-                  />
-                  <View className="absolute inset-0 bg-black/40" />
-                </View>
-              )}
-            </View>
+        {/* ════════════════════════════════════════════
+          CONTENT
+      ════════════════════════════════════════════ */}
+        {/* ════════════════════════════════════════════
+          LAYOUT: Header (static animated) + Tab content (scrollable)
+      ════════════════════════════════════════════ */}
+        <View style={{ flex: 1 }}>
 
-            {/* QUICK STATS + CREATOR INFO */}
-            <View className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
-              {/* Stats bar */}
-              <View className="flex-row px-4 py-3">
-                <StatCell
-                  icon={<CalendarDays size={14} color="#60a5fa" />}
-                  value={`${trip.duration_days}j`}
-                  label="Durée"
-                />
-                <View className="w-px bg-zinc-800 mx-2" />
-                <StatCell
-                  icon={<MapPin size={14} color="#c084fc" />}
-                  value={String(destinations.length)}
-                  label={destinations.length > 1 ? 'Villes' : 'Ville'}
-                />
-                <View className="w-px bg-zinc-800 mx-2" />
-                <StatCell
-                  icon={<Navigation size={14} color="#34d399" />}
-                  value={String(totalSpots)}
-                  label="Lieux"
-                />
-              </View>
+          {/* ── HEADER BLOCK — position absolute pour que le ScrollView ne resize pas ── */}
+          <Animated.View
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10 }}
+            pointerEvents="box-none"
+            onLayout={(e) => {
+              if (!headerMeasured.current) {
+                setHeaderHeight(e.nativeEvent.layout.height);
+                headerMeasured.current = true;
+              }
+            }}
+          >
 
-              {/* Creator info (if present) */}
-              {trip.content_creator_handle && (
-                <View className="border-t border-zinc-800 px-4 py-3 flex-row items-center gap-3">
-                  <Camera size={16} color="#a1a1aa" />
-                  <View className="flex-1">
-                    <Text className="text-xs text-zinc-500">Créateur de contenu</Text>
-                    <Text className="text-sm text-white font-medium">@{trip.content_creator_handle}</Text>
-                  </View>
-                  {trip.source_url && (
-                    <TouchableOpacity onPress={() => Linking.openURL(trip.source_url!)}>
-                      <View className="flex-row items-center gap-1">
-                        <Text className="text-xs text-blue-400">Voir la vidéo</Text>
-                        <ExternalLink size={12} color="#60a5fa" />
-                      </View>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              )}
-            </View>
-
-            {/* Single destination with saved city link */}
-            {destinations.length === 1 && getSavedCityId(destinations[0].city) && (
-              <TouchableOpacity
-                onPress={() => router.push(`/(tabs)/trips/city/${getSavedCityId(destinations[0].city)}`)}
-                className="bg-zinc-900 rounded-xl border border-zinc-800 p-4 flex-row items-center gap-3"
-                style={{ borderColor: '#a855f74D' }}
-              >
-                <View
-                  className="w-10 h-10 rounded-full items-center justify-center"
-                  style={{ backgroundColor: '#a855f733' }}
+            {/* HERO MAP — animated height expand/collapse */}
+            <Animated.View style={{ width: '100%', height: mapExpandAnim }}>
+              {/* Gradient mask fades out when expanded */}
+              <Animated.View style={{ flex: 1, opacity: mapGradientOpacity }}>
+                <MaskedView
+                  style={{ width: '100%', height: '100%' }}
+                  maskElement={
+                    <LinearGradient
+                      colors={['#000', '#000', '#000', 'transparent']}
+                      locations={[0, 0.6, 0.75, 1]}
+                      style={{ flex: 1 }}
+                    />
+                  }
                 >
-                  <Building2 size={20} color="#a855f7" />
-                </View>
-                <View className="flex-1">
-                  <Text className="text-sm font-medium text-white">
-                    {destinations[0].city}
-                  </Text>
-                  <Text className="text-xs text-zinc-500">
-                    Voir les highlights de cette ville
-                  </Text>
-                </View>
-                <ExternalLink size={16} color="#a855f7" />
-              </TouchableOpacity>
-            )}
-
-            {/* Destinations overview (multi-stop) */}
-            {destinations.length > 1 && (
-              <View className="bg-zinc-900 rounded-xl border border-zinc-800 p-4">
-                {/* Header */}
-                <View className="flex-row items-center justify-between mb-3">
-                  <Text className="text-xs font-medium text-zinc-500 uppercase tracking-wide">
-                    Étapes du voyage
-                  </Text>
-                  {!isEditingOrder ? (
-                    <TouchableOpacity
-                      onPress={enterEditMode}
-                      className="flex-row items-center gap-1 px-2 py-1 rounded-lg"
-                      style={{ backgroundColor: '#27272a', borderWidth: 1, borderColor: '#3f3f46' }}
-                    >
-                      <GripVertical size={12} color="#a1a1aa" />
-                      <Text style={{ fontSize: 11, color: '#a1a1aa' }}>Réordonner</Text>
-                    </TouchableOpacity>
+                  {destinations.length > 0 ? (
+                    <InteractiveHeroMap
+                      destinations={destinations}
+                      highlightedCity={highlightedCity}
+                    />
                   ) : (
-                    <View className="flex-row items-center gap-2">
-                      <TouchableOpacity
-                        onPress={cancelEditMode}
-                        disabled={isSavingOrder}
-                        className="p-1.5 rounded-lg"
-                        style={{ backgroundColor: '#27272a' }}
-                      >
-                        <X size={16} color="#a1a1aa" />
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={confirmOrder}
-                        disabled={isSavingOrder}
-                        className="flex-row items-center gap-1 px-2.5 py-1.5 rounded-lg"
-                        style={{ backgroundColor: '#2563eb', opacity: isSavingOrder ? 0.6 : 1 }}
-                      >
-                        {isSavingOrder ? (
-                          <ActivityIndicator size="small" color="#fff" />
-                        ) : (
-                          <Check size={14} color="#fff" />
-                        )}
-                        <Text style={{ fontSize: 11, color: '#fff', fontWeight: '500' }}>OK</Text>
-                      </TouchableOpacity>
+                    <View className="w-full h-full relative">
+                      <Image
+                        source={{ uri: trip.thumbnail_url || 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=800' }}
+                        className="w-full h-full opacity-60"
+                        resizeMode="cover"
+                      />
+                      <View className="absolute inset-0 bg-black/40" />
                     </View>
                   )}
-                </View>
+                </MaskedView>
+              </Animated.View>
 
-                {/* Mode normal - liste statique */}
-                {!isEditingOrder && destinations.map((dest, i) => {
-                  const savedCityId = getSavedCityId(dest.city);
-                  return (
-                    <View key={dest.id} className="flex-row gap-3 pb-3">
-                      <View className="items-center">
-                        <View className="w-7 h-7 rounded-full bg-blue-500/20 border border-blue-500/40 items-center justify-center">
-                          <Text className="text-blue-400 text-xs font-bold">{i + 1}</Text>
-                        </View>
-                        {i < destinations.length - 1 && (
-                          <View className="w-px flex-1 bg-zinc-700 mt-1" />
-                        )}
-                      </View>
-                      <View className="flex-1 pt-1 flex-row items-start justify-between">
-                        <View className="flex-1">
-                          <Text className="text-sm font-medium text-white">
-                            {[dest.city, dest.country].filter(Boolean).join(', ')}
-                          </Text>
-                          {dest.days_spent && (
-                            <Text className="text-xs text-zinc-500 mt-0.5">
-                              {dest.days_spent} jour{dest.days_spent > 1 ? 's' : ''}
-                            </Text>
-                          )}
-                        </View>
-                        {savedCityId && (
-                          <TouchableOpacity
-                            onPress={() => router.push(`/(tabs)/trips/city/${savedCityId}`)}
-                            className="flex-row items-center gap-1 px-2 py-1 rounded-lg"
-                            style={{ backgroundColor: '#a855f71A', borderWidth: 1, borderColor: '#a855f74D' }}
-                          >
-                            <Building2 size={12} color="#a855f7" />
-                            <Text style={{ fontSize: 10, color: '#a855f7' }}>Voir</Text>
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                    </View>
-                  );
-                })}
-
-                {/* Mode édition - liste draggable */}
-                {isEditingOrder && (
-                  <NestableDraggableFlatList
-                    data={pendingDestinations}
-                    keyExtractor={(item) => item.id}
-                    onDragEnd={({ data }) => setPendingDestinations(data)}
-                    renderItem={({ item: dest, drag, isActive, getIndex }: RenderItemParams<Destination>) => {
-                      const i = getIndex() ?? 0;
-                      return (
-                        <ScaleDecorator activeScale={0.95}>
-                          <TouchableOpacity
-                            activeOpacity={0.7}
-                            onLongPress={drag}
-                            delayLongPress={100}
-                            disabled={isActive}
-                            style={{
-                              flexDirection: 'row',
-                              alignItems: 'center',
-                              backgroundColor: isActive ? '#27272a' : 'transparent',
-                              borderRadius: 8,
-                              paddingVertical: 8,
-                              paddingHorizontal: 4,
-                              marginBottom: 4,
-                            }}
-                          >
-                            <View style={{ alignItems: 'center', marginRight: 12 }}>
-                              <View
-                                style={{
-                                  width: 28,
-                                  height: 28,
-                                  borderRadius: 14,
-                                  backgroundColor: 'rgba(59, 130, 246, 0.2)',
-                                  borderWidth: 1,
-                                  borderColor: 'rgba(59, 130, 246, 0.4)',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                }}
-                              >
-                                <Text style={{ color: '#60a5fa', fontSize: 12, fontWeight: 'bold' }}>
-                                  {i + 1}
-                                </Text>
-                              </View>
-                            </View>
-                            <View style={{ flex: 1 }}>
-                              <Text style={{ color: '#fff', fontSize: 14, fontWeight: '500' }}>
-                                {[dest.city, dest.country].filter(Boolean).join(', ')}
-                              </Text>
-                              {dest.days_spent && (
-                                <Text style={{ color: '#71717a', fontSize: 12, marginTop: 2 }}>
-                                  {dest.days_spent} jour{dest.days_spent > 1 ? 's' : ''}
-                                </Text>
-                              )}
-                            </View>
-                            <TouchableOpacity
-                              onPress={() => {
-                                Alert.alert(
-                                  'Supprimer cette ville ?',
-                                  `${dest.city} sera supprimée de l'itinéraire.`,
-                                  [
-                                    { text: 'Annuler', style: 'cancel' },
-                                    {
-                                      text: 'Supprimer',
-                                      style: 'destructive',
-                                      onPress: () => setPendingDestinations(prev => prev.filter(d => d.id !== dest.id)),
-                                    },
-                                  ]
-                                );
-                              }}
-                              style={{ padding: 8 }}
-                            >
-                              <Trash2 size={16} color="#f87171" />
-                            </TouchableOpacity>
-                            <View style={{ padding: 8 }}>
-                              <GripVertical size={18} color={isActive ? '#60a5fa' : '#71717a'} />
-                            </View>
-                          </TouchableOpacity>
-                        </ScaleDecorator>
-                      );
-                    }}
+              {/* Map shown without gradient when expanded */}
+              {isMapExpanded && (
+                <View style={{ position: 'absolute', inset: 0 }}>
+                  <InteractiveHeroMap
+                    destinations={destinations}
+                    highlightedCity={highlightedCity}
                   />
-                )}
-              </View>
-            )}
+                </View>
+              )}
 
-            {/* Add city button */}
-            <TouchableOpacity
-              onPress={() => setShowAddCityModal(true)}
-              className="flex-row items-center justify-center gap-2 py-3 rounded-xl"
-              style={{
-                backgroundColor: '#a855f71A',
-                borderWidth: 1,
-                borderColor: '#a855f74D',
-              }}
-            >
-              <Plus size={18} color="#a855f7" />
-              <Text style={{ color: '#a855f7', fontWeight: '500' }}>Ajouter une ville</Text>
-            </TouchableOpacity>
+              {/* Expand/collapse button */}
+              {destinations.length > 0 && (
+                <TouchableOpacity
+                  onPress={toggleMapExpanded}
+                  style={{
+                    position: 'absolute',
+                    bottom: isMapExpanded ? insets.top + 16 : 28,
+                    right: 14,
+                    width: 34,
+                    height: 34,
+                    borderRadius: 10,
+                    backgroundColor: 'rgba(0,0,0,0.55)',
+                    borderWidth: 1,
+                    borderColor: 'rgba(255,255,255,0.15)',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  {isMapExpanded
+                    ? <Icon name={"fullscreen-exit-line"} size={15} color="#fff" />
+                    : <Icon name={"fullscreen-line"} size={15} color="#fff" />
+                  }
+                </TouchableOpacity>
+              )}
 
-            {/* Days */}
-            {days.length === 0 ? (
-              <EmptyState message="Aucun itinéraire extrait pour ce voyage." />
-            ) : (
-              days.map((day) => (
-                <DayCard
-                  key={day.id}
-                  day={day}
-                  isExpanded={expandedDay === day.day_number}
-                  onToggle={() => setExpandedDay(expandedDay === day.day_number ? -1 : day.day_number)}
-                />
-              ))
-            )}
-          </View>
-        )}
-
-        {/* ─────────────────── BUDGET ─────────────────── */}
-        {activeTab === 'budget' && (
-          <View className="gap-3 pb-6 px-4 pt-4">
-            {!budget ? (
-              <EmptyState message="Aucune information budget disponible." />
-            ) : (
-              <>
-                {/* Total hero */}
-                {budget.total_estimated && (
-                  <View className="bg-blue-600/20 border border-blue-500/30 rounded-2xl p-5">
-                    <Text className="text-xs text-zinc-400 mb-1">Budget total estimé</Text>
-                    <View className="flex-row items-end gap-2">
-                      <Text className="text-4xl font-bold text-white">{budget.total_estimated}</Text>
-                      {budget.currency && (
-                        <Text className="text-xl text-zinc-400 mb-1">{budget.currency}</Text>
-                      )}
-                    </View>
-                    {(budget.per_day_min || budget.per_day_max) && (
-                      <View className="mt-3 bg-white/5 rounded-lg px-3 py-2 flex-row items-center gap-2 self-start">
-                        <TrendingDown size={14} color="#60a5fa" />
-                        <Text className="text-sm text-zinc-300">
-                          {budget.per_day_min && budget.per_day_max
-                            ? `${budget.per_day_min} – ${budget.per_day_max} / jour`
-                            : `${budget.per_day_min || budget.per_day_max} / jour`}
-                        </Text>
-                        {budget.currency && (
-                          <Text className="text-xs text-zinc-500">{budget.currency}</Text>
-                        )}
-                      </View>
-                    )}
-                  </View>
-                )}
-
-                {/* Breakdown */}
-                {(budget.accommodation_cost || budget.food_cost || budget.transport_cost || budget.activities_cost) && (
-                  <View className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-                    <Text className="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-4">
-                      Répartition
+              {/* Highlighted city pill — visible when expanded */}
+              {isMapExpanded && highlightedCity && (
+                <View style={{
+                  position: 'absolute',
+                  bottom: 24,
+                  alignSelf: 'center',
+                  left: 0, right: 0,
+                  alignItems: 'center',
+                }}>
+                  <View style={{
+                    backgroundColor: 'rgba(53, 41, 193, 0.85)',
+                    borderWidth: 1,
+                    borderColor: 'rgba(255,255,255,0.2)',
+                    borderRadius: 20,
+                    paddingHorizontal: 16,
+                    paddingVertical: 8,
+                  }}>
+                    <Text style={{ fontFamily: 'Righteous', fontSize: 14, color: '#fff' }}>
+                      📍 {highlightedCity}
                     </Text>
-                    <View className="gap-3">
-                      {budget.accommodation_cost && (
-                        <BudgetLine
-                          icon="🏨"
-                          label="Hébergement"
-                          value={budget.accommodation_cost}
-                          currency={budget.currency}
-                          color="bg-blue-500"
-                        />
-                      )}
-                      {budget.food_cost && (
-                        <BudgetLine
-                          icon="🍽️"
-                          label="Nourriture"
-                          value={budget.food_cost}
-                          currency={budget.currency}
-                          color="bg-orange-500"
-                        />
-                      )}
-                      {budget.transport_cost && (
-                        <BudgetLine
-                          icon="🚗"
-                          label="Transport"
-                          value={budget.transport_cost}
-                          currency={budget.currency}
-                          color="bg-purple-500"
-                        />
-                      )}
-                      {budget.activities_cost && (
-                        <BudgetLine
-                          icon="🎯"
-                          label="Activités"
-                          value={budget.activities_cost}
-                          currency={budget.currency}
-                          color="bg-emerald-500"
-                        />
-                      )}
-                    </View>
-                  </View>
-                )}
-
-                {/* Money saving tips */}
-                {budget.money_saving_tips && budget.money_saving_tips.length > 0 && (
-                  <View className="bg-zinc-900 border border-yellow-500/20 rounded-xl p-4">
-                    <View className="flex-row items-center gap-1.5 mb-3">
-                      <Lightbulb size={14} color="#eab308" />
-                      <Text className="text-xs font-medium text-yellow-500 uppercase tracking-wide">
-                        Conseils pour économiser
-                      </Text>
-                    </View>
-                    <View className="gap-2.5">
-                      {budget.money_saving_tips.map((tip, i) => (
-                        <View key={i} className="flex-row gap-2.5">
-                          <Text className="text-yellow-500 mt-0.5">💡</Text>
-                          <Text className="text-sm text-zinc-300 flex-1">{tip}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  </View>
-                )}
-              </>
-            )}
-          </View>
-        )}
-
-        {/* ─────────────────── PRACTICAL ─────────────────── */}
-        {activeTab === 'practical' && (
-          <View className="gap-3 pb-6 px-4 pt-4">
-            {!practical ? (
-              <EmptyState message="Aucune info pratique disponible." />
-            ) : (
-              <>
-                {/* Essential info */}
-                <View className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
-                  <Text className="text-xs font-medium text-zinc-500 uppercase tracking-wide px-4 pt-4 pb-2">
-                    Informations essentielles
-                  </Text>
-                  <View>
-                    {practical.visa_required !== null && (
-                      <PracticalRow
-                        icon={practical.visa_required
-                          ? <AlertTriangle size={16} color="#fb923c" />
-                          : <Shield size={16} color="#34d399" />}
-                        label="Visa"
-                        value={practical.visa_required ? 'Requis' : 'Non requis'}
-                        valueClass={practical.visa_required ? 'text-orange-300' : 'text-emerald-300'}
-                      />
-                    )}
-                    {practical.local_currency && (
-                      <PracticalRow
-                        icon={<DollarSign size={16} color="#60a5fa" />}
-                        label="Devise locale"
-                        value={practical.local_currency}
-                      />
-                    )}
-                    {practical.language && (
-                      <PracticalRow
-                        icon={<Globe size={16} color="#c084fc" />}
-                        label="Langue"
-                        value={practical.language}
-                      />
-                    )}
                   </View>
                 </View>
+              )}
+            </Animated.View>
 
-                {/* Apps */}
-                {practical.best_apps && practical.best_apps.length > 0 && (
-                  <View className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-                    <View className="flex-row items-center gap-1.5 mb-3">
-                      <Smartphone size={14} color="#60a5fa" />
-                      <Text className="text-xs font-medium text-zinc-500 uppercase tracking-wide">
-                        Applications utiles
-                      </Text>
-                    </View>
-                    <View className="flex-row flex-wrap gap-2">
-                      {practical.best_apps.map((app, i) => (
-                        <View key={i} className="flex-row items-center gap-1.5 bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-1.5">
-                          <Wifi size={12} color="#60a5fa" />
-                          <Text className="text-sm text-blue-300">{app}</Text>
-                        </View>
-                      ))}
-                    </View>
+            {/* TITLE */}
+            <View className="px-8 mt-2">
+              <Text
+                style={{ fontFamily: 'Righteous', fontSize: 24, color: '#FAFAFF' }}
+                numberOfLines={2}
+              >
+                {trip.trip_title}
+              </Text>
+            </View>
+
+            {/* VIBE + STATS — height sur JS thread, opacity+transform sur native thread */}
+            <Animated.View style={{ height: vibeAndStatsHeight, overflow: 'hidden' }}>
+              <Animated.View style={{
+                opacity: vibeAndStatsOpacity,
+                transform: [{ translateY: vibeAndStatsTranslateY }],
+              }}>
+                {trip.vibe && (
+                  <View className="px-8 mt-4 flex-row">
+                    <Pill
+                      label={`${trip.vibe}`}
+                      backgroundColor="#656E57"
+                      textColor="rgba(250, 250, 255, 0.9)"
+                    />
                   </View>
                 )}
-
-                {/* What to pack */}
-                {practical.what_to_pack && practical.what_to_pack.length > 0 && (
-                  <View className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-                    <View className="flex-row items-center gap-1.5 mb-3">
-                      <Package size={14} color="#34d399" />
-                      <Text className="text-xs font-medium text-zinc-500 uppercase tracking-wide">
-                        À emporter
-                      </Text>
-                    </View>
-                    <View className="flex-row flex-wrap gap-2">
-                      {practical.what_to_pack.map((item, i) => (
-                        <View key={i} className="bg-zinc-800 border border-zinc-700 rounded-full px-3 py-1">
-                          <Text className="text-xs text-zinc-300">{item}</Text>
-                        </View>
-                      ))}
-                    </View>
+                <View className="px-8 mt-3">
+                  <View style={{
+                    flexDirection: 'row',
+                    backgroundColor: 'rgba(30, 26, 100, 0.55)',
+                    borderRadius: 14,
+                    borderWidth: 1,
+                    borderColor: '#656E57',
+                  }}>
+                    <StatCell value={`${trip.duration_days}j`} label={t('tripDetail.duration')} />
+                    <View style={{ width: 1, backgroundColor: 'rgba(255,255,255,0.08)', marginHorizontal: 8 }} />
+                    <StatCell value={String(destinations.length)} label={destinations.length > 1 ? t('tripDetail.cities') : t('tripDetail.city')} />
+                    <View style={{ width: 1, backgroundColor: 'rgba(255,255,255,0.08)', marginHorizontal: 8 }} />
+                    <StatCell value={String(totalSpots)} label={t('tripDetail.places')} />
                   </View>
-                )}
+                </View>
+              </Animated.View>
+            </Animated.View>
 
-                {/* Safety tips */}
-                {practical.safety_tips && practical.safety_tips.length > 0 && (
-                  <View className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-                    <View className="flex-row items-center gap-1.5 mb-3">
-                      <Shield size={14} color="#eab308" />
-                      <Text className="text-xs font-medium text-zinc-500 uppercase tracking-wide">
-                        Conseils de sécurité
-                      </Text>
-                    </View>
-                    <View className="gap-2.5">
-                      {practical.safety_tips.map((tip, i) => (
-                        <View key={i} className="flex-row gap-2.5">
-                          <Text className="text-yellow-400">•</Text>
-                          <Text className="text-sm text-zinc-300 flex-1">{tip}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  </View>
-                )}
+            {/* NAVBAR */}
+            <View className="px-4 mt-8">
+              <Navbar
+                variant="secondary"
+                size="sm"
+                tabs={[
+                  { icon: 'route-line', label: t('tripDetail.itinerary') },
+                  { icon: 'money-dollar-circle-line', label: t('tripDetail.budget') },
+                  { icon: 'compass-line', label: t('tripDetail.practical') },
+                  { icon: 'bus-line', label: t('tripDetail.transport') },
+                ]}
+                activeIndex={activeTab === 'itinerary' ? 0 : activeTab === 'budget' ? 1 : activeTab === 'practical' ? 2 : 3}
+                onTabChange={(index) => {
+                  const tabs: Tab[] = ['itinerary', 'budget', 'practical', 'logistics'];
+                  setActiveTab(tabs[index]);
+                }}
+              />
+            </View>
 
-                {/* Things to avoid */}
-                {practical.things_to_avoid && practical.things_to_avoid.length > 0 && (
-                  <View className="bg-zinc-900 border border-red-500/20 rounded-xl p-4">
-                    <View className="flex-row items-center gap-1.5 mb-3">
-                      <AlertTriangle size={14} color="#f87171" />
-                      <Text className="text-xs font-medium text-red-400 uppercase tracking-wide">
-                        À éviter absolument
-                      </Text>
-                    </View>
-                    <View className="gap-2.5">
-                      {practical.things_to_avoid.map((item, i) => (
-                        <View key={i} className="flex-row gap-2.5">
-                          <Text className="text-red-400">✗</Text>
-                          <Text className="text-sm text-zinc-300 flex-1">{item}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  </View>
-                )}
-              </>
-            )}
-          </View>
-        )}
+          </Animated.View>{/* end absolute header */}
 
-        {/* ─────────────────── LOGISTICS ─────────────────── */}
-        {activeTab === 'logistics' && (
-          <View className="gap-3 pb-6 px-4 pt-4">
-            {logistics.length === 0 ? (
-              <EmptyState message="Aucune information de transport disponible." />
-            ) : (
-              <>
-                <Text className="text-xs text-zinc-500 pb-1">
-                  {logistics.length} trajet{logistics.length > 1 ? 's' : ''} planifié{logistics.length > 1 ? 's' : ''}
-                </Text>
+          {/* ── TAB CONTENT — démarre sous le header, overflow hidden pour clipper le contenu ── */}
+          <Animated.View style={{ position: 'absolute', top: scrollContainerTop, left: 0, right: 0, bottom: 0, overflow: 'hidden' }}>
+            <Animated.ScrollView
+              ref={outerScrollRef}
+              style={{ flex: 1 }}
+              contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}
+              showsVerticalScrollIndicator={false}
+              scrollEventThrottle={16}
+              onScroll={Animated.event(
+                [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+                { useNativeDriver: false }
+              )}
+            >
 
-                {/* Timeline */}
-                <View>
-                  {logistics.map((leg, i) => {
-                    const cfg = TRANSPORT_CONFIG[leg.transport_mode ?? ''] ?? { emoji: '🚌', label: leg.transport_mode ?? 'Transport' };
-                    return (
-                      <View key={leg.id} className="flex-row gap-3 pb-3">
-                        <View className="items-center">
-                          <View className="w-9 h-9 rounded-full bg-zinc-800 border border-zinc-700 items-center justify-center">
-                            <Text className="text-lg">{cfg.emoji}</Text>
-                          </View>
-                          {i < logistics.length - 1 && (
-                            <View className="w-px flex-1 bg-zinc-700 mt-1 min-h-[24px]" />
-                          )}
-                        </View>
-
-                        <View className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl p-3.5 mb-3">
-                          <View className="flex-row items-start justify-between gap-2 mb-2">
-                            <View className="flex-1">
-                              <Text className="text-sm font-medium text-white">
-                                {leg.from_location} <Text className="text-zinc-500">→</Text> {leg.to_location}
-                              </Text>
-                              <View className="bg-zinc-800 border border-zinc-700 rounded-full px-2 py-0.5 mt-1 self-start">
-                                <Text className="text-zinc-400 text-xs">{cfg.label}</Text>
-                              </View>
-                            </View>
-                          </View>
-
-                          <View className="flex-row flex-wrap gap-3">
-                            {leg.duration && (
-                              <View className="flex-row items-center gap-1">
-                                <Clock size={12} color="#60a5fa" />
-                                <Text className="text-xs text-zinc-400">{leg.duration}</Text>
-                              </View>
-                            )}
-                            {leg.cost && (
-                              <View className="flex-row items-center gap-1">
-                                <DollarSign size={12} color="#34d399" />
-                                <Text className="text-xs text-zinc-400">{leg.cost}</Text>
-                              </View>
-                            )}
-                          </View>
-
-                          {leg.tips && (
-                            <Text className="text-xs text-blue-300 italic mt-2 pt-2 border-t border-zinc-800">
-                              💡 {leg.tips}
-                            </Text>
-                          )}
-                        </View>
+              {/* ─────────────────── ITINERARY ─────────────────── */}
+              {activeTab === 'itinerary' && (
+                <View className="pb-6 px-4 pt-4" style={{minHeight: SCREEN_HEIGHT - headerHeight + COLLAPSE_RANGE}}>
+                  {/* Section header: ETAPES DU VOYAGE + Reorder button */}
+                  <View className="flex-row items-center justify-between mb-4">
+                    <Text style={{
+                      fontFamily: 'DM Sans',
+                      fontWeight: '600',
+                      fontSize: 12,
+                      color: 'rgba(255, 255, 255, 0.5)',
+                      letterSpacing: 1,
+                    }}>
+                      {t('tripDetail.tripSteps').toUpperCase()}
+                    </Text>
+                    {!isEditingOrder ? (
+                      <SecondaryButton
+                        title={t('tripDetail.reorder')}
+                        variant="square"
+                        size="sm"
+                        leftIcon="draggable"
+                        onPress={enterEditMode}
+                      />
+                    ) : (
+                      <View className="row-center">
+                        <SecondaryButton title={t('tripDetail.cancel')} variant="square" size="sm" onPress={cancelEditMode} />
+                        <SecondaryButton
+                          title={t('tripDetail.ok')}
+                          leftIcon="check-line"
+                          variant="square"
+                          size="sm"
+                          active={true}
+                          onPress={confirmOrder}
+                          disabled={isSavingOrder}
+                        />
                       </View>
-                    );
-                  })}
-                </View>
-              </>
-            )}
-          </View>
-        )}
-      </NestableScrollContainer>
+                    )}
+                  </View>
 
-      {/* Add City Modal */}
-      {tripId && (
-        <AddCityToTripModal
-          visible={showAddCityModal}
-          onClose={() => setShowAddCityModal(false)}
-          tripId={tripId}
-          tripDays={days as unknown as ReviewDbDay[]}
-          existingDestinations={days.map((d) => d.location).filter((loc): loc is string => !!loc)}
-          onCityAdded={loadTrip}
-        />
-      )}
-    </View>
+                  {/* Mode normal - TripStepCards */}
+                  {!isEditingOrder && (
+                    <View style={{ gap: 12 }}>
+                      {destinations.map((dest, i) => {
+                        const destinationDays = days.filter(
+                          (day) => day.location?.toLowerCase().includes(dest.city?.toLowerCase() || '')
+                        );
+                        const spotsCount = destinationDays.reduce((acc, day) => acc + (day.spots?.length || 0), 0);
+                        const dayDataArray: DayData[] = destinationDays.map((day) => {
+                          const categoryMap: Record<string, number> = {};
+                          day.spots?.forEach((spot) => {
+                            const category = mapSpotTypeToCategory(spot.spot_type);
+                            categoryMap[category] = (categoryMap[category] || 0) + 1;
+                          });
+                          const categories = Object.entries(categoryMap).map(([cat, count]) => ({
+                            category: cat as CategoryType,
+                            count,
+                          }));
+                          return {
+                            dayNumber: day.day_number,
+                            spotName: day.theme || day.location || t('tripDetail.day', { number: day.day_number }),
+                            duration: t('tripDetail.spots', { count: day.spots?.length || 0 }),
+                            categories,
+                          };
+                        });
+                        const savedCityId = getSavedCityId(dest.city);
+                        return (
+                          <TripStepCard
+                            key={dest.id}
+                            stepNumber={i + 1}
+                            cityName={dest.city || 'Destination'}
+                            daysCount={dest.days_spent || destinationDays.length || 1}
+                            spotsCount={spotsCount}
+                            days={dayDataArray}
+                            onExpand={(city) => setHighlightedCity(city)}
+                            onViewDetails={
+                              savedCityId ? () => router.push(`/(tabs)/trips/city/${savedCityId}`) : undefined
+                            }
+                          />
+                        );
+                      })}
+                    </View>
+                  )}
+
+                  {/* Mode édition - DraggableFlatList (scrollDisabled, scroll handled by outer ScrollView) */}
+                  {isEditingOrder && (
+                    <DraggableFlatList
+                      data={pendingDestinations}
+                      keyExtractor={(item) => item.id}
+                      onDragEnd={({ data }) => setPendingDestinations(data)}
+                      scrollEnabled={false}
+                      renderItem={({ item: dest, drag, isActive, getIndex }: RenderItemParams<Destination>) => {
+                        const i = getIndex() ?? 0;
+                        return (
+                          <ScaleDecorator activeScale={0.95}>
+                            <TouchableOpacity
+                              activeOpacity={0.7}
+                              onLongPress={drag}
+                              delayLongPress={100}
+                              disabled={isActive}
+                              style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                backgroundColor: isActive ? 'rgba(30, 26, 100, 0.8)' : 'rgba(30, 26, 100, 0.55)',
+                                borderRadius: 12,
+                                borderWidth: 1,
+                                borderColor: isActive ? 'rgba(82, 72, 212, 0.5)' : 'rgba(255, 255, 255, 0.09)',
+                                paddingVertical: 12,
+                                paddingHorizontal: 14,
+                                marginBottom: 8,
+                              }}
+                            >
+                              <View style={{
+                                width: 24, height: 24, borderRadius: 12,
+                                backgroundColor: '#3529C1',
+                                alignItems: 'center', justifyContent: 'center', marginRight: 10,
+                              }}>
+                                <Text style={{ fontFamily: 'Righteous', fontSize: 11, color: '#fff' }}>{i + 1}</Text>
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <Text style={{ fontFamily: 'Righteous', fontSize: 14, color: '#fff' }}>
+                                  {dest.city || t('tripDetail.destination')}
+                                </Text>
+                                {dest.days_spent && (
+                                  <Text style={{ fontFamily: 'DMSans', fontSize: 11, color: 'rgba(255,255,255,0.45)', marginTop: 2 }}>
+                                    {dest.days_spent} {dest.days_spent > 1 ? t('tripDetail.days_plural') : t('tripDetail.day_plural')}
+                                  </Text>
+                                )}
+                              </View>
+                              <TouchableOpacity
+                                onPress={() => {
+                                  Alert.alert(
+                                    t('tripDetail.deleteCity'),
+                                    t('tripDetail.cityWillBeDeleted', { city: dest.city }),
+                                    [
+                                      { text: t('tripDetail.cancel'), style: 'cancel' },
+                                      {
+                                        text: t('tripDetail.delete'),
+                                        style: 'destructive',
+                                        onPress: () => setPendingDestinations(prev => prev.filter(d => d.id !== dest.id)),
+                                      },
+                                    ]
+                                  );
+                                }}
+                                style={{ padding: 8 }}
+                              >
+                                <Icon name={"delete-bin-2-line"} size={16} color="#f87171" />
+                              </TouchableOpacity>
+                              <View style={{ padding: 8 }}>
+                                <Icon name={"draggable"} size={18} color={isActive ? '#5248D4' : 'rgba(255,255,255,0.45)'} />
+                              </View>
+                            </TouchableOpacity>
+                          </ScaleDecorator>
+                        );
+                      }}
+                    />
+                  )}
+
+                  {/* Add city button */}
+                  <View style={{ marginTop: 16 }}>
+                    <PrimaryButton
+                      title={t('tripDetail.addCity')}
+                      leftIcon="add-line"
+                      color="purple"
+                      size="sm"
+                      fullWidth
+                      onPress={() => setShowAddCityModal(true)}
+                      style={{ opacity: 0.8 }}
+                    />
+                  </View>
+                </View>
+              )}
+
+              {/* ─────────────────── BUDGET ─────────────────── */}
+              {activeTab === 'budget' && (
+                <View className="pb-6 px-4 pt-4" style={{minHeight: SCREEN_HEIGHT - headerHeight + COLLAPSE_RANGE}}>
+                  {!budget ? (
+                    <EmptyState message={t('tripDetail.noBudgetInfo')} />
+                  ) : (
+                    <TripBudgetCard
+                      totalEstimated={budget.total_estimated}
+                      currency={budget.currency}
+                      perDayMin={budget.per_day_min}
+                      perDayMax={budget.per_day_max}
+                      accommodationCost={budget.accommodation_cost}
+                      foodCost={budget.food_cost}
+                      transportCost={budget.transport_cost}
+                      activitiesCost={budget.activities_cost}
+                      moneySavingTips={budget.money_saving_tips}
+                    />
+                  )}
+                </View>
+              )}
+
+              {/* ─────────────────── PRACTICAL ─────────────────── */}
+              {activeTab === 'practical' && (
+                <View className="pb-6 px-4 pt-4" style={{minHeight: SCREEN_HEIGHT - headerHeight + COLLAPSE_RANGE}}>
+                  {!practical ? (
+                    <EmptyState message={t('tripDetail.noPracticalInfo')} />
+                  ) : (
+                    <PracticalCard info={practical} />
+                  )}
+                </View>
+              )}
+
+              {/* ─────────────────── LOGISTICS ─────────────────── */}
+              {activeTab === 'logistics' && (
+                <View className="pb-6 px-4 pt-4" style={{minHeight: SCREEN_HEIGHT - headerHeight + COLLAPSE_RANGE}}>
+                  <TransportCard legs={logistics} />
+                </View>
+              )}
+            </Animated.ScrollView>
+          </Animated.View>
+        </View>
+
+        {/* Add City Modal */}
+        {tripId && (
+          <AddCityToTripModal
+            visible={showAddCityModal}
+            onClose={() => setShowAddCityModal(false)}
+            tripId={tripId}
+            tripDays={days as unknown as ReviewDbDay[]}
+            existingDestinations={days.map((d) => d.location).filter((loc): loc is string => !!loc)}
+            onCityAdded={loadTrip}
+          />
+        )}
+      </ImageBackground>
     </GestureHandlerRootView>
   );
 }
@@ -1047,324 +833,22 @@ export default function TripDetailPage() {
 // Sub-components
 // ─────────────────────────────────────────────────────────────────────────────
 
-function DayCard({ day, isExpanded, onToggle }: {
-  day: DbDay; isExpanded: boolean; onToggle: () => void;
-}) {
-  const router = useRouter();
-  const sortedSpots = useMemo(
-    () => [...(day.spots ?? [])].sort((a, b) => (a.spot_order ?? 0) - (b.spot_order ?? 0)),
-    [day.spots]
-  );
-  const hasMeals = day.breakfast_spot || day.lunch_spot || day.dinner_spot;
-  const isLinkedToCity = !!day.linked_city_id;
-
-  return (
-    <View className={`bg-zinc-900 rounded-xl border overflow-hidden ${
-      isLinkedToCity ? 'border-purple-500/30' : 'border-zinc-800'
-    }`}>
-      {/* Header */}
-      <TouchableOpacity
-        onPress={onToggle}
-        className="px-4 py-3.5 flex-row items-center gap-3"
-        activeOpacity={0.7}
-      >
-        <View className="w-9 h-9 rounded-full bg-blue-500/30 border border-blue-500/30 items-center justify-center">
-          <Text className="text-blue-400 font-bold text-sm">{day.day_number}</Text>
-        </View>
-
-        <View className="flex-1">
-          <View className="flex-row items-center gap-1.5">
-            <Text className="text-sm font-semibold text-white" numberOfLines={1}>
-              {day.location ?? `Jour ${day.day_number}`}
-            </Text>
-            {isLinkedToCity && (
-              <TouchableOpacity
-                onPress={() => router.push(`/(tabs)/trips/city/${day.linked_city_id}`)}
-                hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-              >
-                <View className="bg-purple-500/20 border border-purple-500/30 rounded px-1.5 py-0.5 flex-row items-center gap-0.5">
-                  <Building2 size={10} color="#a855f7" />
-                  <Text className="text-[10px] text-purple-400">Sync</Text>
-                </View>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-
-        <View className="flex-row items-center gap-2">
-          {sortedSpots.some(s => s.highlight) && (
-            <Star size={14} color="#facc15" fill="#facc15" />
-          )}
-          <Text className="text-xs text-zinc-600">{sortedSpots.length} lieux</Text>
-          {isExpanded ? (
-            <ChevronUp size={16} color="#71717a" />
-          ) : (
-            <ChevronDown size={16} color="#71717a" />
-          )}
-        </View>
-      </TouchableOpacity>
-
-      {/* Expanded content */}
-      {isExpanded && (
-        <View className="border-t border-zinc-800 p-3 gap-2">
-          {/* Spots */}
-          {sortedSpots.length > 0 && (
-            <View className="gap-2">
-              {sortedSpots.map((spot) => (
-                <SpotCard key={spot.id} spot={spot} />
-              ))}
-            </View>
-          )}
-
-          {/* Meals */}
-          {hasMeals && (
-            <View className="bg-zinc-800/50 rounded-lg p-3 gap-2 border border-zinc-700/40">
-              <View className="flex-row items-center gap-1.5">
-                <Utensils size={12} color="#a1a1aa" />
-                <Text className="text-xs text-zinc-500 font-medium">Où manger</Text>
-              </View>
-              {day.breakfast_spot && (
-                <MealRow icon={<Coffee size={12} color="#f59e0b" />} label="Matin" value={day.breakfast_spot} />
-              )}
-              {day.lunch_spot && (
-                <MealRow icon={<Sun size={12} color="#eab308" />} label="Midi" value={day.lunch_spot} />
-              )}
-              {day.dinner_spot && (
-                <MealRow icon={<Moon size={12} color="#60a5fa" />} label="Soir" value={day.dinner_spot} />
-              )}
-            </View>
-          )}
-
-          {/* Accommodation */}
-          {day.accommodation_name && (
-            <View className="bg-zinc-800/50 rounded-lg p-3 border border-zinc-700/40">
-              <View className="flex-row items-center gap-1.5 mb-2">
-                <BedDouble size={12} color="#a1a1aa" />
-                <Text className="text-xs text-zinc-500 font-medium">Hébergement</Text>
-              </View>
-              <View className="flex-row items-start justify-between gap-2">
-                <View className="flex-1">
-                  <Text className="text-sm text-white font-medium">{day.accommodation_name}</Text>
-                  <View className="flex-row items-center gap-2 mt-0.5">
-                    {day.accommodation_type && (
-                      <Text className="text-xs text-zinc-500 capitalize">{day.accommodation_type}</Text>
-                    )}
-                    {day.accommodation_price_per_night && (
-                      <Text className="text-xs text-emerald-400">{day.accommodation_price_per_night} / nuit</Text>
-                    )}
-                  </View>
-                </View>
-              </View>
-              {day.accommodation_tips && (
-                <Text className="text-xs text-blue-300 italic mt-2">💡 {day.accommodation_tips}</Text>
-              )}
-            </View>
-          )}
-        </View>
-      )}
-    </View>
-  );
-}
-
-function SpotCard({ spot }: { spot: DbSpot }) {
-  const router = useRouter();
-  const priceCfg = spot.price_range ? PRICE_CONFIG[spot.price_range] : null;
-  const isSynced = spot._synced_from_highlight && spot.source_city_id;
-
-  const openMap = () => {
-    const lat = spot.latitude;
-    const lng = spot.longitude;
-    const address = spot.address;
-    const label = encodeURIComponent(spot.name);
-
-    // Build URLs for each map app
-    const getUrls = () => {
-      if (lat && lng) {
-        return {
-          appleMaps: `maps://maps.apple.com/?q=${label}&ll=${lat},${lng}`,
-          googleMaps: `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`,
-          waze: `waze://?ll=${lat},${lng}&navigate=yes`,
-        };
-      } else if (address) {
-        const encodedAddress = encodeURIComponent(address);
-        return {
-          appleMaps: `maps://maps.apple.com/?q=${encodedAddress}`,
-          googleMaps: `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`,
-          waze: `waze://?q=${encodedAddress}`,
-        };
-      }
-      return null;
-    };
-
-    const urls = getUrls();
-    if (!urls) return;
-
-    const openUrl = async (url: string, fallbackUrl?: string) => {
-      const canOpen = await Linking.canOpenURL(url);
-      if (canOpen) {
-        Linking.openURL(url);
-      } else if (fallbackUrl) {
-        Linking.openURL(fallbackUrl);
-      } else {
-        Alert.alert('Erreur', "Impossible d'ouvrir l'application");
-      }
-    };
-
-    const options = ['Apple Maps', 'Google Maps', 'Waze', 'Annuler'];
-    const cancelButtonIndex = 3;
-
-    if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions(
-        {
-          options,
-          cancelButtonIndex,
-          title: 'Ouvrir avec',
-        },
-        (buttonIndex) => {
-          if (buttonIndex === 0) {
-            openUrl(urls.appleMaps);
-          } else if (buttonIndex === 1) {
-            openUrl(urls.googleMaps);
-          } else if (buttonIndex === 2) {
-            openUrl(urls.waze, `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`);
-          }
-        }
-      );
-    } else {
-      // Android - use Alert as ActionSheet alternative
-      Alert.alert('Ouvrir avec', undefined, [
-        { text: 'Google Maps', onPress: () => openUrl(urls.googleMaps) },
-        {
-          text: 'Waze',
-          onPress: () => openUrl(urls.waze, `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`),
-        },
-        { text: 'Annuler', style: 'cancel' },
-      ]);
-    }
-  };
-
-  return (
-    <View className={`rounded-lg border p-3 ${
-      spot.highlight
-        ? 'bg-yellow-500/8 border-yellow-500/25'
-        : 'bg-zinc-800/40 border-zinc-700/40'
-    }`}>
-      <View className="flex-row items-start gap-2.5">
-        <Text className="text-base mt-0.5">{SPOT_EMOJI[spot.spot_type ?? ''] ?? '📍'}</Text>
-
-        <View className="flex-1">
-          <View className="flex-row items-center justify-between">
-            <View className="flex-row items-center gap-1 flex-1">
-              <Text className="text-sm font-medium text-white" numberOfLines={1}>{spot.name}</Text>
-              {spot.highlight && <Star size={12} color="#facc15" fill="#facc15" />}
-              {spot.verified && (
-                <View className="bg-emerald-400/10 border border-emerald-400/20 rounded px-1">
-                  <Text className="text-[10px] text-emerald-400">✓</Text>
-                </View>
-              )}
-              {isSynced && (
-                <TouchableOpacity
-                  onPress={() => router.push(`/(tabs)/trips/city/${spot.source_city_id}`)}
-                  className="bg-purple-500/10 border border-purple-500/20 rounded px-1.5 py-0.5 flex-row items-center gap-0.5"
-                >
-                  <Building2 size={10} color="#a855f7" />
-                  <Text className="text-[10px] text-purple-400">City</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-            {(spot.latitude && spot.longitude || spot.address) && (
-              <TouchableOpacity onPress={openMap} className="p-1">
-                <Navigation size={12} color="#71717a" />
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {spot.address && (
-            <View className="flex-row items-center gap-1 mt-0.5">
-              <MapPin size={10} color="#71717a" />
-              <Text className="text-xs text-zinc-500" numberOfLines={1}>{spot.address}</Text>
-            </View>
-          )}
-
-          <View className="flex-row items-center gap-3 mt-1.5 flex-wrap">
-            {spot.duration_minutes && (
-              <View className="flex-row items-center gap-0.5">
-                <Clock size={12} color="#71717a" />
-                <Text className="text-xs text-zinc-500">{spot.duration_minutes} min</Text>
-              </View>
-            )}
-            {spot.price_range && priceCfg && (
-              <Text className={`text-xs font-medium ${priceCfg.color}`}>
-                {spot.price_range === 'gratuit' ? '🆓 Gratuit' : `${spot.price_range} ${priceCfg.label}`}
-              </Text>
-            )}
-            {spot.price_detail && (
-              <Text className="text-xs text-zinc-500 italic">{spot.price_detail}</Text>
-            )}
-          </View>
-
-          {spot.tips && (
-            <Text className="text-xs text-blue-300/90 italic mt-1.5">{`💡 ${spot.tips}`}</Text>
-          )}
-        </View>
-      </View>
-    </View>
-  );
-}
-
-function MealRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
-  return (
-    <View className="flex-row items-center gap-2">
-      {icon}
-      <Text className="text-xs text-zinc-500 w-8">{label}</Text>
-      <Text className="text-xs text-zinc-300 flex-1" numberOfLines={1}>{value}</Text>
-    </View>
-  );
-}
-
-function BudgetLine({ icon, label, value, currency, color }: {
-  icon: string; label: string; value: string; currency: string | null; color: string;
+function StatCell({value, label }: {
+  value: string; label: string;
 }) {
   return (
-    <View className="flex-row items-center gap-3">
-      <View className={`w-1 h-8 rounded-full ${color} opacity-80`} />
-      <Text className="text-sm text-zinc-400 flex-1">{icon} {label}</Text>
-      <Text className="text-sm font-semibold text-white">
-        {value}{currency ? ` ${currency}` : ''}
-      </Text>
-    </View>
-  );
-}
-
-function PracticalRow({ icon, label, value, valueClass = 'text-white' }: {
-  icon: React.ReactNode; label: string; value: string; valueClass?: string;
-}) {
-  return (
-    <View className="flex-row items-center gap-3 px-4 py-3 border-b border-zinc-800">
-      {icon}
-      <Text className="text-sm text-zinc-400 flex-1">{label}</Text>
-      <Text className={`text-sm font-medium ${valueClass}`}>{value}</Text>
-    </View>
-  );
-}
-
-function StatCell({ icon, value, label }: {
-  icon: React.ReactNode; value: string; label: string;
-}) {
-  return (
-    <View className="flex-1 items-center gap-0.5 py-1">
-      {icon}
-      <Text className="text-base font-bold text-white">{value}</Text>
-      <Text className="text-[10px] text-zinc-500">{label}</Text>
+    <View className="flex-1 items-center gap-0.5 py-2">
+      <Text className="text-base font-bold text-white/80 font-righteous">{value}</Text>
+      <Text className="text-[10px] text-white/60 font-dmsans">{label}</Text>
     </View>
   );
 }
 
 function EmptyState({ message }: { message: string }) {
   return (
-    <View className="items-center py-14">
-      <Info size={32} color="#52525b" style={{ opacity: 0.4 }} />
-      <Text className="text-sm text-zinc-500 mt-2">{message}</Text>
+    <View className="empty-state">
+      <Icon name={"information-2-fill"} size={32} color="#52525b" style={{ opacity: 0.4 }} />
+      <Text className="text-sm text-zinc-500 mt-2 font-dmsans">{message}</Text>
     </View>
   );
 }

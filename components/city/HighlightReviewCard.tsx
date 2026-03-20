@@ -1,52 +1,21 @@
 /**
  * HighlightReviewCard - Editable highlight card for review mode
  */
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   ScrollView,
-  Animated,
-  Easing,
 } from 'react-native';
-import {
-  Utensils,
-  Landmark,
-  Trees,
-  ShoppingBag,
-  Moon,
-  MapPin,
-  Star,
-  Pencil,
-  Trash2,
-  X,
-  Save,
-  Check,
-  GripVertical,
-  Loader2,
-} from 'lucide-react-native';
+import { useTranslation } from 'react-i18next';
+import Icon from 'react-native-remix-icon';
 import { Highlight, HighlightCategory, HIGHLIGHT_CATEGORIES } from '@/types/api';
 import type { HighlightUpdatePayload } from '@/services/cityReviewService';
-
-const CATEGORY_ICONS: Record<HighlightCategory, React.ComponentType<any>> = {
-  food: Utensils,
-  culture: Landmark,
-  nature: Trees,
-  shopping: ShoppingBag,
-  nightlife: Moon,
-  other: MapPin,
-};
-
-const CATEGORY_COLORS: Record<HighlightCategory, string> = {
-  food: '#f97316',
-  culture: '#3b82f6',
-  nature: '#22c55e',
-  shopping: '#ec4899',
-  nightlife: '#a855f7',
-  other: '#71717a',
-};
+import { SecondaryButton } from '@/components/SecondaryButton';
+import { PrimaryButton } from '@/components/PrimaryButton';
+import Loader from '@/components/Loader';
 
 const PRICE_OPTIONS = ['gratuit', '€', '€€', '€€€', '€€€€'] as const;
 
@@ -58,20 +27,46 @@ const PRICE_COLORS: Record<string, string> = {
   '€€€€': '#ef4444',
 };
 
-function SpinningLoader({ size = 12, color = '#fff' }: { size?: number; color?: string }) {
-  const rotation = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.loop(
-      Animated.timing(rotation, { toValue: 1, duration: 1000, easing: Easing.linear, useNativeDriver: true })
-    ).start();
-  }, []);
-  const spin = rotation.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
-  return (
-    <Animated.View style={{ transform: [{ rotate: spin }] }}>
-      <Loader2 size={size} color={color} />
-    </Animated.View>
-  );
-}
+const getPriceLabel = (price: string, t: (key: string) => string): string => {
+  switch (price) {
+    case 'gratuit': return t('spotReview.free');
+    case '€': return t('spotReview.budget');
+    case '€€': return t('spotReview.moderate');
+    case '€€€': return t('spotReview.expensive');
+    case '€€€€': return t('spotReview.luxury');
+    default: return price;
+  }
+};
+
+const CATEGORY_ICONS: Record<HighlightCategory, string> = {
+  food: 'restaurant-line',
+  culture: 'landscape-line',
+  nature: 'leaf-line',
+  shopping: 'shopping-bag-3-line',
+  nightlife: 'moon-clear-line',
+  other: 'map-pin-line',
+};
+
+const getCategoryLabel = (cat: HighlightCategory, t: (key: string) => string): string => {
+  switch (cat) {
+    case 'food': return t('spotReview.restaurant');
+    case 'culture': return t('spotReview.attraction');
+    case 'nature': return t('spotReview.activity');
+    case 'shopping': return t('spotReview.shopping');
+    case 'nightlife': return t('spotReview.bar');
+    case 'other': return t('spotReview.other');
+    default: return cat;
+  }
+};
+
+const CATEGORY_TO_COLOR_SCHEME: Record<HighlightCategory, 'default' | 'restaurant' | 'culture' | 'nature' | 'shopping' | 'nightlife' | 'location' | 'mustsee'> = {
+  food: 'restaurant',
+  culture: 'culture',
+  nature: 'nature',
+  shopping: 'shopping',
+  nightlife: 'nightlife',
+  other: 'default',
+};
 
 interface HighlightReviewCardProps {
   highlight: Highlight;
@@ -90,6 +85,7 @@ export function HighlightReviewCard({
   isDragging,
   drag,
 }: HighlightReviewCardProps) {
+  const { t } = useTranslation();
   const [isEditing, setIsEditing] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -128,13 +124,13 @@ export function HighlightReviewCard({
   };
 
   const category = highlight.category || 'other';
-  const Icon = CATEGORY_ICONS[category];
-  const color = CATEGORY_COLORS[category];
+  const categoryIcon = CATEGORY_ICONS[category];
+  const categoryColor = HIGHLIGHT_CATEGORIES[category].color;
   const included = highlight.validated !== false;
 
-  // Styling based on included state
-  const cardBg = included ? '#18181b' : '#18181b4D';
-  const cardBorder = included ? '#27272a' : '#27272a66';
+  // Glassmorphism styling
+  const cardBg = included ? '#1e1a64' : '#1e1a644D';
+  const cardBorder = included ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.05)';
 
   if (!isEditing) {
     return (
@@ -149,7 +145,7 @@ export function HighlightReviewCard({
       >
         <View className="flex-row">
           {/* Category colored bar */}
-          <View style={{ width: 3, backgroundColor: included ? color : 'transparent' }} />
+          <View style={{ width: 3, backgroundColor: included ? categoryColor : 'transparent' }} />
 
           <View className="flex-1 p-3">
             <View className="flex-row items-start gap-3">
@@ -158,39 +154,39 @@ export function HighlightReviewCard({
                 <TouchableOpacity
                   onLongPress={drag}
                   delayLongPress={100}
-                  className="pt-0.5"
+                  className="my-auto"
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                  <GripVertical size={16} color="#52525b" />
+                  <Icon name="draggable" size={16} color="rgba(255,255,255,0.3)" />
                 </TouchableOpacity>
               )}
 
               {/* Category Icon */}
               <View
                 className="w-10 h-10 rounded-full items-center justify-center flex-shrink-0"
-                style={{ backgroundColor: included ? `${color}22` : '#27272a66' }}
+                style={{ backgroundColor: included ? `${categoryColor}22` : 'rgba(255,255,255,0.05)' }}
               >
-                <Icon size={20} color={included ? color : '#52525b'} />
+                <Icon name={categoryIcon as any} size={20} color={included ? categoryColor : 'rgba(255,255,255,0.3)'} />
               </View>
 
               {/* Content */}
-              <View className="flex-1 min-w-0">
+              <View className="flex-min-width">
                 {/* Header: Name + Must-see */}
-                <View className="flex-row items-center gap-2">
+                <View className="row-center">
                   <Text
                     className="font-semibold flex-1"
                     numberOfLines={1}
                     style={{
-                      color: included ? '#fff' : '#52525b',
+                      color: included ? '#FAFAFF' : 'rgba(255,255,255,0.3)',
                       textDecorationLine: included ? 'none' : 'line-through',
                     }}
                   >
                     {highlight.name}
                   </Text>
                   {highlight.is_must_see && included && (
-                    <View className="flex-row items-center gap-1 bg-yellow-500/20 px-2 py-0.5 rounded-full">
-                      <Star size={10} color="#facc15" fill="#facc15" />
-                      <Text className="text-yellow-400 text-xs">Must-see</Text>
+                    <View className="flex-row items-center gap-1 bg-yellow-500/20 pill-small">
+                      <Icon name="star-fill" size={10} color="#facc15" />
+                      <Text className="text-yellow-400 text-xs">{t('highlightReview.mustSee')}</Text>
                     </View>
                   )}
                 </View>
@@ -199,10 +195,10 @@ export function HighlightReviewCard({
                 <View className="flex-row items-center gap-2 mt-1 flex-wrap">
                   {highlight.subtype && (
                     <View
-                      className="px-2 py-0.5 rounded-full"
-                      style={{ backgroundColor: included ? `${color}22` : '#27272a66' }}
+                      className="pill-small"
+                      style={{ backgroundColor: included ? `${categoryColor}22` : 'rgba(255,255,255,0.05)' }}
                     >
-                      <Text style={{ color: included ? color : '#52525b', fontSize: 11 }}>
+                      <Text style={{ color: included ? categoryColor : 'rgba(255,255,255,0.3)', fontSize: 11 }}>
                         {highlight.subtype}
                       </Text>
                     </View>
@@ -210,7 +206,7 @@ export function HighlightReviewCard({
                   {highlight.price_range && included && (
                     <Text
                       className="text-sm font-medium"
-                      style={{ color: PRICE_COLORS[highlight.price_range] || '#71717a' }}
+                      style={{ color: PRICE_COLORS[highlight.price_range] || 'rgba(255,255,255,0.5)' }}
                     >
                       {highlight.price_range}
                     </Text>
@@ -219,7 +215,7 @@ export function HighlightReviewCard({
 
                 {/* Address */}
                 {highlight.address && included && (
-                  <Text className="text-xs text-zinc-500 mt-1" numberOfLines={1}>
+                  <Text className="text-xs text-white/50 mt-1" numberOfLines={1}>
                     {highlight.address}
                   </Text>
                 )}
@@ -235,24 +231,14 @@ export function HighlightReviewCard({
               {/* Actions */}
               <View className="flex-row items-center gap-1 flex-shrink-0">
                 {/* Include/Exclude toggle */}
-                <TouchableOpacity
+                <SecondaryButton
+                  title={included ? t('highlightReview.included') : t('highlightReview.excluded')}
+                  active={included}
+                  variant="pill"
+                  size="sm"
+                  leftIcon={included ? 'check-line' : 'close-line'}
                   onPress={() => onValidatedChange(!included)}
-                  className="flex-row items-center gap-1 px-2 py-1 rounded-full"
-                  style={{
-                    backgroundColor: included ? `${color}26` : '#27272acc',
-                    borderWidth: 1,
-                    borderColor: included ? `${color}4D` : '#3f3f46',
-                  }}
-                >
-                  {included ? (
-                    <Check size={10} color={color} />
-                  ) : (
-                    <X size={10} color="#71717a" />
-                  )}
-                  <Text style={{ fontSize: 10, color: included ? color : '#71717a' }}>
-                    {included ? 'Inclus' : 'Exclu'}
-                  </Text>
-                </TouchableOpacity>
+                />
 
                 {/* Edit button */}
                 <TouchableOpacity
@@ -263,22 +249,25 @@ export function HighlightReviewCard({
                   className="p-1.5"
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Pencil size={14} color="#71717a" />
+                  <Icon name="pencil-fill" size={14} color="rgba(255,255,255,0.5)" />
                 </TouchableOpacity>
 
                 {/* Delete button */}
                 {confirmDel ? (
                   <View className="flex-row items-center gap-1">
-                    <TouchableOpacity
+                    <PrimaryButton
+                      title={t('highlightReview.delete')}
+                      size="sm"
+                      color="purple"
                       onPress={onDelete}
-                      className="px-2 py-1 rounded"
-                      style={{ backgroundColor: '#dc2626' }}
-                    >
-                      <Text style={{ fontSize: 10, color: '#fff' }}>Suppr</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => setConfirmDel(false)} className="p-1">
-                      <X size={12} color="#71717a" />
-                    </TouchableOpacity>
+                    />
+                    <SecondaryButton
+                      title=""
+                      variant="pill"
+                      size="sm"
+                      leftIcon="close-line"
+                      onPress={() => setConfirmDel(false)}
+                    />
                   </View>
                 ) : (
                   <TouchableOpacity
@@ -286,7 +275,7 @@ export function HighlightReviewCard({
                     className="p-1.5"
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   >
-                    <Trash2 size={14} color="#71717a" />
+                    <Icon name="delete-bin-2-fill" size={14} color="rgba(255,144,144,0.4)" />
                   </TouchableOpacity>
                 )}
               </View>
@@ -301,26 +290,26 @@ export function HighlightReviewCard({
   return (
     <View
       className="rounded-xl p-4 gap-3"
-      style={{ borderWidth: 1, borderColor: '#3b82f64D', backgroundColor: '#18181b' }}
+      style={{ borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', backgroundColor: '#1e1a64' }}
     >
       {/* Name */}
       <View>
-        <Text style={{ fontSize: 10, color: '#71717a', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-          Nom
+        <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+          {t('highlightReview.name')}
         </Text>
         <TextInput
           value={form.name ?? ''}
           onChangeText={(v) => setForm((f) => ({ ...f, name: v }))}
           className="mt-1 rounded-lg px-3 py-2 text-sm text-white"
-          style={{ backgroundColor: '#27272a', borderWidth: 1, borderColor: '#3f3f46' }}
-          placeholderTextColor="#71717a"
+          style={{ backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}
+          placeholderTextColor="rgba(255,255,255,0.3)"
         />
       </View>
 
       {/* Category */}
       <View>
-        <Text style={{ fontSize: 10, color: '#71717a', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-          Categorie
+        <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+          {t('highlightReview.category')}
         </Text>
         <ScrollView
           horizontal
@@ -329,25 +318,19 @@ export function HighlightReviewCard({
           contentContainerStyle={{ gap: 6 }}
         >
           {(Object.keys(HIGHLIGHT_CATEGORIES) as HighlightCategory[]).map((cat) => {
-            const CatIcon = CATEGORY_ICONS[cat];
-            const catColor = CATEGORY_COLORS[cat];
+            const catIcon = CATEGORY_ICONS[cat];
             const isSelected = form.category === cat;
             return (
-              <TouchableOpacity
+              <SecondaryButton
                 key={cat}
+                title={getCategoryLabel(cat, t)}
+                active={isSelected}
+                variant="pill"
+                size="sm"
+                leftIcon={catIcon as any}
+                colorScheme={CATEGORY_TO_COLOR_SCHEME[cat]}
                 onPress={() => setForm((f) => ({ ...f, category: cat }))}
-                className="flex-row items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
-                style={{
-                  backgroundColor: isSelected ? `${catColor}33` : '#27272a',
-                  borderWidth: 1,
-                  borderColor: isSelected ? `${catColor}4D` : '#3f3f46',
-                }}
-              >
-                <CatIcon size={14} color={isSelected ? catColor : '#71717a'} />
-                <Text style={{ fontSize: 12, color: isSelected ? catColor : '#a1a1aa' }}>
-                  {HIGHLIGHT_CATEGORIES[cat].label}
-                </Text>
-              </TouchableOpacity>
+              />
             );
           })}
         </ScrollView>
@@ -355,23 +338,23 @@ export function HighlightReviewCard({
 
       {/* Subtype */}
       <View>
-        <Text style={{ fontSize: 10, color: '#71717a', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-          Sous-type
+        <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+          {t('highlightReview.subtype')}
         </Text>
         <TextInput
           value={form.subtype ?? ''}
           onChangeText={(v) => setForm((f) => ({ ...f, subtype: v || undefined }))}
-          placeholder="Ex: Restaurant italien, Musee d'art..."
-          placeholderTextColor="#52525b"
+          placeholder={t('highlightReview.subtypePlaceholder')}
+          placeholderTextColor="rgba(255,255,255,0.3)"
           className="mt-1 rounded-lg px-3 py-2 text-sm text-white"
-          style={{ backgroundColor: '#27272a', borderWidth: 1, borderColor: '#3f3f46' }}
+          style={{ backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}
         />
       </View>
 
       {/* Price */}
       <View>
-        <Text style={{ fontSize: 10, color: '#71717a', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-          Prix
+        <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+          {t('highlightReview.price')}
         </Text>
         <ScrollView
           horizontal
@@ -381,22 +364,15 @@ export function HighlightReviewCard({
         >
           {PRICE_OPTIONS.map((p) => {
             const isSelected = form.price_range === p;
-            const priceColor = PRICE_COLORS[p];
             return (
-              <TouchableOpacity
+              <SecondaryButton
                 key={p}
+                title={getPriceLabel(p, t)}
+                active={isSelected}
+                variant="pill"
+                size="sm"
                 onPress={() => setForm((f) => ({ ...f, price_range: p }))}
-                className="px-3 py-1.5 rounded-lg"
-                style={{
-                  backgroundColor: isSelected ? `${priceColor}33` : '#27272a',
-                  borderWidth: 1,
-                  borderColor: isSelected ? `${priceColor}4D` : '#3f3f46',
-                }}
-              >
-                <Text style={{ fontSize: 12, color: isSelected ? priceColor : '#a1a1aa' }}>
-                  {p}
-                </Text>
-              </TouchableOpacity>
+              />
             );
           })}
         </ScrollView>
@@ -404,36 +380,36 @@ export function HighlightReviewCard({
 
       {/* Address */}
       <View>
-        <Text style={{ fontSize: 10, color: '#71717a', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-          Adresse
+        <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+          {t('spotReview.address')}
         </Text>
         <TextInput
           value={form.address ?? ''}
           onChangeText={(v) => setForm((f) => ({ ...f, address: v || undefined }))}
-          placeholder="Optionnel"
-          placeholderTextColor="#52525b"
+          placeholder={t('highlightReview.optional')}
+          placeholderTextColor="rgba(255,255,255,0.3)"
           className="mt-1 rounded-lg px-3 py-2 text-sm text-white"
-          style={{ backgroundColor: '#27272a', borderWidth: 1, borderColor: '#3f3f46' }}
+          style={{ backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}
         />
       </View>
 
       {/* Description */}
       <View>
-        <Text style={{ fontSize: 10, color: '#71717a', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-          Description
+        <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+          {t('highlightReview.description')}
         </Text>
         <TextInput
           value={form.description ?? ''}
           onChangeText={(v) => setForm((f) => ({ ...f, description: v || undefined }))}
-          placeholder="Optionnel"
-          placeholderTextColor="#52525b"
+          placeholder={t('highlightReview.optional')}
+          placeholderTextColor="rgba(255,255,255,0.3)"
           multiline
           numberOfLines={2}
           className="mt-1 rounded-lg px-3 py-2 text-sm text-white"
           style={{
-            backgroundColor: '#27272a',
+            backgroundColor: 'rgba(255,255,255,0.1)',
             borderWidth: 1,
-            borderColor: '#3f3f46',
+            borderColor: 'rgba(255,255,255,0.1)',
             textAlignVertical: 'top',
             minHeight: 60,
           }}
@@ -442,21 +418,21 @@ export function HighlightReviewCard({
 
       {/* Tips */}
       <View>
-        <Text style={{ fontSize: 10, color: '#71717a', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-          Conseil
+        <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+          {t('highlightReview.tips')}
         </Text>
         <TextInput
           value={form.tips ?? ''}
           onChangeText={(v) => setForm((f) => ({ ...f, tips: v || undefined }))}
-          placeholder="Optionnel"
-          placeholderTextColor="#52525b"
+          placeholder={t('highlightReview.optional')}
+          placeholderTextColor="rgba(255,255,255,0.3)"
           multiline
           numberOfLines={2}
           className="mt-1 rounded-lg px-3 py-2 text-sm text-white"
           style={{
-            backgroundColor: '#27272a',
+            backgroundColor: 'rgba(255,255,255,0.1)',
             borderWidth: 1,
-            borderColor: '#3f3f46',
+            borderColor: 'rgba(255,255,255,0.1)',
             textAlignVertical: 'top',
             minHeight: 60,
           }}
@@ -464,44 +440,33 @@ export function HighlightReviewCard({
       </View>
 
       {/* Must-see toggle */}
-      <TouchableOpacity
+      <SecondaryButton
+        title={t('highlightReview.mustSeeLabel')}
+        active={form.is_must_see}
+        variant="pill"
+        size="sm"
+        colorScheme="mustsee"
+        leftIcon={form.is_must_see ? 'star-fill' : 'star-line'}
         onPress={() => setForm((f) => ({ ...f, is_must_see: !f.is_must_see }))}
-        className="flex-row items-center gap-2 px-3 py-2 rounded-lg self-start"
-        style={{
-          backgroundColor: form.is_must_see ? '#eab3081A' : '#27272a',
-          borderWidth: 1,
-          borderColor: form.is_must_see ? '#eab3084D' : '#3f3f46',
-        }}
-      >
-        <Star
-          size={14}
-          color={form.is_must_see ? '#facc15' : '#71717a'}
-          fill={form.is_must_see ? '#facc15' : 'none'}
-        />
-        <Text style={{ fontSize: 12, color: form.is_must_see ? '#fde68a' : '#71717a' }}>
-          Incontournable
-        </Text>
-      </TouchableOpacity>
+      />
 
       {/* Actions */}
-      <View className="flex-row gap-2 pt-2">
-        <TouchableOpacity
+      <View className="flex-row justify-around gap-2 pt-2 w-full">
+        <PrimaryButton
+          title={t('highlightReview.save')}
+          leftIcon="save-line"
           onPress={handleSave}
-          disabled={saving}
-          className="flex-1 flex-row items-center justify-center gap-2 py-2.5 rounded-lg"
-          style={{ backgroundColor: '#2563eb' }}
-        >
-          {saving ? <SpinningLoader size={14} color="#fff" /> : <Save size={14} color="#fff" />}
-          <Text style={{ fontSize: 13, color: '#fff', fontWeight: '500' }}>Enregistrer</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
+          loading={saving}
+          size="sm"
+          fullWidth={true}
+          style={{flexGrow: 0.7}}
+        />
+        <SecondaryButton
+          title={t('highlightReview.cancel')}
+          variant="square"
           onPress={() => setIsEditing(false)}
-          className="flex-row items-center gap-2 px-4 py-2.5 rounded-lg"
-          style={{ backgroundColor: '#27272a' }}
-        >
-          <X size={14} color="#a1a1aa" />
-          <Text style={{ fontSize: 13, color: '#a1a1aa' }}>Annuler</Text>
-        </TouchableOpacity>
+          style={{ flex: 1 }}
+        />
       </View>
     </View>
   );

@@ -1,12 +1,5 @@
 /**
- * profile.tsx - React Native version
- * Complete refactor with NativeWind, preserving all React source features
- *
- * Données réelles depuis Supabase :
- * - profiles  → username, full_name, bio
- * - trips     → nombre créés, vues totales reçues
- * - user_saved_trips → nombre sauvegardés
- * - analysis_jobs   → vidéos analysées
+ * profile.tsx - Profile page with glassmorphism design
  */
 
 import React, { useState, useEffect } from 'react';
@@ -14,24 +7,16 @@ import {
   View,
   Text,
   TouchableOpacity,
-  ActivityIndicator,
-  ScrollView,
+  ScrollView, ImageBackground,
 } from 'react-native';
+import Loader from '@/components/Loader';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import {
-  User as UserIcon,
-  LogOut,
-  MapPin,
-  Bookmark,
-  Eye,
-  Video,
-  CheckCircle2,
-  Clock,
-  ChevronRight,
-} from 'lucide-react-native';
+import Icon from 'react-native-remix-icon';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
+import { useTranslation } from 'react-i18next';
+import { LanguagePicker } from '@/components/ui/LanguagePicker';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -63,23 +48,48 @@ function initials(email: string) {
 // ── Stat Card ─────────────────────────────────────────────────────────────────
 
 function StatCard({
-                    icon,
-                    value,
-                    label,
-                    color,
-                  }: {
-  icon: React.ReactNode;
+  icon,
+  value,
+  label,
+  bgColor,
+  borderColor,
+}: {
+  icon: string;
   value: number | string;
   label: string;
-  color: string;
+  bgColor: string;
+  borderColor: string;
 }) {
   return (
-    <View className="bg-zinc-900 rounded-xl border border-zinc-800 p-4 items-center gap-2">
-      <View className={`w-9 h-9 rounded-full items-center justify-center ${color}`}>
-        {icon}
+    <View
+      style={{
+        backgroundColor: 'rgba(30, 26, 100, 0.4)',
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: borderColor,
+        padding: 14,
+        alignItems: 'center',
+        gap: 8,
+      }}
+    >
+      <View
+        style={{
+          width: 36,
+          height: 36,
+          borderRadius: 18,
+          backgroundColor: bgColor,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Icon name={icon as any} size={16} color="#FAFAFF" />
       </View>
-      <Text className="text-2xl font-bold text-white">{value}</Text>
-      <Text className="text-xs text-zinc-500 text-center">{label}</Text>
+      <Text className="font-righteous" style={{ fontSize: 24, fontWeight: 'bold', color: '#FAFAFF' }}>
+        {value}
+      </Text>
+      <Text className="font-dmsans" style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.5)', textAlign: 'center' }}>
+        {label}
+      </Text>
     </View>
   );
 }
@@ -90,6 +100,7 @@ export default function ProfilePage() {
   const router = useRouter();
   const { user, signOut } = useAuth();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
 
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
@@ -121,101 +132,162 @@ export default function ProfilePage() {
   const handleSignOut = async () => {
     setSigning(true);
     await signOut();
-    // AuthGuard redirigera vers /login automatiquement
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────────
+  // ── Render ───────────────────────────────────────────────────────────────────
 
   if (loading) {
     return (
-      <View className="flex-1 bg-black items-center justify-center">
-        <ActivityIndicator size="large" color="#60a5fa" />
-      </View>
+      <ImageBackground
+        source={require('@/assets/images/bg-gradient.png')}
+        className="flex-1"
+        resizeMode="cover"
+      >
+        <View
+          className="flex-1 justify-center items-center"
+          style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}
+        >
+          <Loader />
+        </View>
+      </ImageBackground>
     );
   }
 
-  const displayName = profile?.full_name ?? profile?.username ?? user?.email ?? 'Utilisateur';
-  const isTestMode = false; // En React: import.meta.env.VITE_TEST_MODE === 'true'
+  const displayName = profile?.full_name ?? profile?.username ?? user?.email ?? t('auth.signIn');
+  const isTestMode = false;
+
+  const formatDate = (iso: string) => {
+    return new Date(iso).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+  };
 
   return (
     <ScrollView
-      className="flex-1 bg-black"
-      contentContainerStyle={{ paddingTop: insets.top }}
+      style={{ flex: 1 }}
+      contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: insets.bottom + 100, flexGrow: 1 }}
     >
-      {/* ══════════════════════════════════════════
-          CONTENT
-      ══════════════════════════════════════════ */}
-      <View className="max-w-2xl mx-auto w-full px-4 gap-4">
+      <View style={{ maxWidth: 400, marginHorizontal: 'auto', width: '100%', paddingHorizontal: 16, gap: 16 }}>
 
         {/* ── Carte utilisateur ── */}
-        <View className="bg-zinc-900 rounded-2xl border border-zinc-800 p-5">
-          <View className="flex-row items-start gap-4">
+        <View
+          style={{
+            backgroundColor: 'rgba(30, 26, 100, 0.6)',
+            borderRadius: 20,
+            borderWidth: 1,
+            borderColor: 'rgba(255, 255, 255, 0.1)',
+            padding: 20,
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 16 }}>
             {/* Avatar */}
             {profile?.avatar_url ? (
-              <View className="w-16 h-16 rounded-full bg-zinc-800">
-                {/* Image would go here if available */}
+              <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(255, 255, 255, 0.1)' }}>
               </View>
             ) : (
-              <View className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 items-center justify-center">
+              <View
+                style={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: 32,
+                  backgroundColor: 'rgba(96, 165, 250, 0.3)',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
                 {user?.email ? (
-                  <Text className="text-white font-bold text-lg">
+                  <Text className="font-righteous" style={{ fontSize: 24, fontWeight: 'bold', color: '#FAFAFF' }}>
                     {initials(user.email)}
                   </Text>
                 ) : (
-                  <UserIcon size={28} color="#ffffff" />
+                  <Icon name="user-line" size={28} color="#ffffff" />
                 )}
               </View>
             )}
 
             {/* Infos */}
-            <View className="flex-1 min-w-0">
+            <View style={{ flex: 1, minWidth: 0 }}>
               {/* Name + Badges */}
-              <View className="flex-row items-center gap-2 flex-wrap">
-                <Text className="text-lg font-bold text-white" numberOfLines={1}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <Text style={{ fontSize: 18, fontFamily: 'Righteous', fontWeight: 'bold', color: '#FAFAFF' }} numberOfLines={1}>
                   {displayName}
                 </Text>
 
                 {/* Email confirmé badge */}
                 {user?.emailConfirmed ? (
-                  <View className="bg-emerald-500/15 border border-emerald-500/25 rounded-full px-2 py-0.5 flex-row items-center gap-1">
-                    <CheckCircle2 size={10} color="#34d399" />
-                    <Text className="text-emerald-400 text-[10px] font-medium">Vérifié</Text>
+                  <View
+                    style={{
+                      backgroundColor: 'rgba(52, 211, 153, 0.15)',
+                      borderWidth: 1,
+                      borderColor: 'rgba(52, 211, 153, 0.25)',
+                      borderRadius: 20,
+                      paddingHorizontal: 8,
+                      paddingVertical: 2,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 4,
+                    }}
+                  >
+                    <Icon name="check-line" size={10} color="#34d399" />
+                    <Text className="font-dmsans" style={{ color: '#34d399', fontSize: 10, fontWeight: '500' }}>{t('profile.verified')}</Text>
                   </View>
                 ) : (
-                  <View className="bg-yellow-500/15 border border-yellow-500/25 rounded-full px-2 py-0.5">
-                    <Text className="text-yellow-400 text-[10px] font-medium">
-                      En attente de confirmation
+                  <View
+                    style={{
+                      backgroundColor: 'rgba(234, 179, 8, 0.15)',
+                      borderWidth: 1,
+                      borderColor: 'rgba(234, 179, 8, 0.25)',
+                      borderRadius: 20,
+                      paddingHorizontal: 8,
+                      paddingVertical: 2,
+                    }}
+                  >
+                    <Text className="font-dmsans" style={{ color: '#fbbf24', fontSize: 10, fontWeight: '500' }}>
+                      {t('profile.pendingConfirmation')}
                     </Text>
                   </View>
                 )}
 
                 {/* Test mode badge */}
                 {isTestMode && (
-                  <View className="bg-purple-500/15 border border-purple-500/25 rounded-full px-2 py-0.5">
-                    <Text className="text-purple-400 text-[10px] font-medium">Test</Text>
+                  <View
+                    style={{
+                      backgroundColor: 'rgba(168, 85, 247, 0.15)',
+                      borderWidth: 1,
+                      borderColor: 'rgba(168, 85, 247, 0.25)',
+                      borderRadius: 20,
+                      paddingHorizontal: 8,
+                      paddingVertical: 2,
+                    }}
+                  >
+                    <Text className="font-dmsans" style={{ color: '#a855f7', fontSize: 10, fontWeight: '500' }}>{t('profile.test')}</Text>
                   </View>
                 )}
               </View>
 
               {/* Username */}
               {profile?.username && (
-                <Text className="text-sm text-zinc-500 mt-0.5">@{profile.username}</Text>
+                <Text className="font-dmsans" style={{ fontSize: 13, color: 'rgba(255, 255, 255, 0.5)', marginTop: 2 }}>
+                  @{profile.username}
+                </Text>
               )}
 
               {/* Email */}
-              <Text className="text-xs text-zinc-600 mt-0.5">{user?.email}</Text>
+              <Text className="font-dmsans" style={{ fontSize: 12, color: 'rgba(255, 255, 255, 0.4)', marginTop: 2 }}>
+                {user?.email}
+              </Text>
 
               {/* Bio */}
               {profile?.bio && (
-                <Text className="text-sm text-zinc-400 mt-2 leading-5">{profile.bio}</Text>
+                <Text className="font-dmsans" style={{ fontSize: 13, color: 'rgba(255, 255, 255, 0.6)', marginTop: 8, lineHeight: 20 }}>
+                  {profile.bio}
+                </Text>
               )}
 
               {/* Member since */}
               {profile?.created_at && (
-                <View className="flex-row items-center gap-1 mt-2">
-                  <Clock size={12} color="#52525b" />
-                  <Text className="text-xs text-zinc-600">
-                    Membre depuis {formatDate(profile.created_at)}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8 }}>
+                  <Icon name="time-line" size={12} color="rgba(255, 255, 255, 0.4)" />
+                  <Text className="font-dmsans" style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.4)' }}>
+                    {t('profile.memberSince', { date: formatDate(profile.created_at) })}
                   </Text>
                 </View>
               )}
@@ -225,75 +297,104 @@ export default function ProfilePage() {
 
         {/* ── Stats ── */}
         {stats && (
-          <View className="gap-3">
+          <View style={{ gap: 12 }}>
             {/* First row */}
-            <View className="flex-row gap-3">
-              <View className="flex-1">
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <View style={{ flex: 1 }}>
                 <StatCard
-                  icon={<MapPin size={16} color="#60a5fa" />}
+                  icon="map-pin-line"
                   value={stats.tripsCreated}
-                  label="Voyages créés"
-                  color="bg-blue-500/15"
+                  label={t('profile.tripsCreated')}
+                  bgColor="rgba(59, 130, 246, 0.2)"
+                  borderColor="rgba(59, 130, 246, 0.3)"
                 />
               </View>
-              <View className="flex-1">
+              <View style={{ flex: 1 }}>
                 <StatCard
-                  icon={<Bookmark size={16} color="#c084fc" />}
+                  icon="bookmark-line"
                   value={stats.tripsSaved}
-                  label="Voyages sauvegardés"
-                  color="bg-purple-500/15"
+                  label={t('profile.tripsSaved')}
+                  bgColor="rgba(168, 85, 247, 0.2)"
+                  borderColor="rgba(168, 85, 247, 0.3)"
                 />
               </View>
             </View>
 
             {/* Second row */}
-            <View className="flex-row gap-3">
-              <View className="flex-1">
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <View style={{ flex: 1 }}>
                 <StatCard
-                  icon={<Eye size={16} color="#34d399" />}
+                  icon="eye-line"
                   value={stats.totalViews}
-                  label="Vues reçues"
-                  color="bg-emerald-500/15"
+                  label={t('profile.viewsReceived')}
+                  bgColor="rgba(34, 197, 94, 0.2)"
+                  borderColor="rgba(34, 197, 94, 0.3)"
                 />
               </View>
-              <View className="flex-1">
+              <View style={{ flex: 1 }}>
                 <StatCard
-                  icon={<Video size={16} color="#fb923c" />}
+                  icon="movie-line"
                   value={stats.videosAnalyzed}
-                  label="Vidéos analysées"
-                  color="bg-orange-500/15"
+                  label={t('profile.videosAnalyzed')}
+                  bgColor="rgba(251, 146, 60, 0.2)"
+                  borderColor="rgba(251, 146, 60, 0.3)"
                 />
               </View>
             </View>
           </View>
         )}
 
+        {/* ── Language Picker ── */}
+        <LanguagePicker />
+
         {/* ── Raccourcis ── */}
-        <View className="bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden">
+        <View
+          style={{
+            backgroundColor: 'rgba(30, 26, 100, 0.4)',
+            borderRadius: 16,
+            borderWidth: 1,
+            borderColor: 'rgba(255, 255, 255, 0.08)',
+            overflow: 'hidden',
+          }}
+        >
           {/* Mes voyages sauvegardés */}
           <TouchableOpacity
             onPress={() => router.push('/(tabs)/trips')}
-            className="flex-row items-center justify-between px-4 py-3.5 border-b border-zinc-800"
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingHorizontal: 16,
+              paddingVertical: 14,
+              borderBottomWidth: 1,
+              borderBottomColor: 'rgba(255, 255, 255, 0.06)',
+            }}
             activeOpacity={0.7}
           >
-            <View className="flex-row items-center gap-3">
-              <Bookmark size={16} color="#a1a1aa" />
-              <Text className="text-sm text-white">Mes voyages sauvegardés</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <Icon name="bookmark-line" size={16} color="rgba(255, 255, 255, 0.5)" />
+              <Text className="font-dmsans" style={{ fontSize: 14, color: '#FAFAFF' }}>{t('profile.mySavedTrips')}</Text>
             </View>
-            <ChevronRight size={16} color="#52525b" />
+            <Icon name="arrow-right-s-line" size={16} color="rgba(255, 255, 255, 0.3)" />
           </TouchableOpacity>
 
           {/* Analyser une nouvelle vidéo */}
           <TouchableOpacity
             onPress={() => router.push('/')}
-            className="flex-row items-center justify-between px-4 py-3.5"
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingHorizontal: 16,
+              paddingVertical: 14,
+            }}
             activeOpacity={0.7}
           >
-            <View className="flex-row items-center gap-3">
-              <Video size={16} color="#a1a1aa" />
-              <Text className="text-sm text-white">Analyser une nouvelle vidéo</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <Icon name="movie-line" size={16} color="rgba(255, 255, 255, 0.5)" />
+              <Text className="font-dmsans" style={{ fontSize: 14, color: '#FAFAFF' }}>{t('profile.analyzeNewVideo')}</Text>
             </View>
-            <ChevronRight size={16} color="#52525b" />
+            <Icon name="arrow-right-s-line" size={16} color="rgba(255, 255, 255, 0.3)" />
           </TouchableOpacity>
         </View>
 
@@ -302,27 +403,36 @@ export default function ProfilePage() {
           <TouchableOpacity
             onPress={handleSignOut}
             disabled={signing || isTestMode}
-            className={`w-full flex-row items-center justify-center gap-2 border border-zinc-800 rounded-lg px-6 py-3 ${
-              signing || isTestMode ? 'opacity-40' : ''
-            }`}
+            style={{
+              width: '100%',
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              borderWidth: 1,
+              borderColor: 'rgb(166,60,60)',
+              borderRadius: 12,
+              paddingVertical: 14,
+              opacity: signing || isTestMode ? 0.4 : 1,
+            }}
             activeOpacity={0.7}
           >
             {signing ? (
               <>
-                <ActivityIndicator size="small" color="#a1a1aa" />
-                <Text className="text-zinc-400 font-medium">Déconnexion…</Text>
+                <Loader size={20} color="rgba(255, 255, 255, 0.5)" />
+                <Text className="font-dmsans" style={{ color: 'rgb(166,60,60)', fontWeight: '500' }}>{t('profile.signingOut')}</Text>
               </>
             ) : (
               <>
-                <LogOut size={16} color="#a1a1aa" />
-                <Text className="text-zinc-400 font-medium">Se déconnecter</Text>
+                <Icon name="logout-box-line" size={16} color="rgb(255,82,82)" />
+                <Text className="font-dmsans" style={{ color: 'rgb(255,82,82)', fontWeight: '500' }}>{t('profile.signOut')}</Text>
               </>
             )}
           </TouchableOpacity>
 
           {isTestMode && (
-            <Text className="text-xs text-zinc-600 text-center mt-2">
-              Déconnexion désactivée en mode test
+            <Text className="font-dmsans" style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.4)', textAlign: 'center', marginTop: 8 }}>
+              {t('authGuard.logoutDisabled')}
             </Text>
           )}
         </View>

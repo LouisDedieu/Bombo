@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 
 
@@ -13,58 +13,19 @@ export default function NotFound() {
   const router = useRouter();
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.code}>404</Text>
-      <Text style={styles.title}>Page introuvable</Text>
-      <Text style={styles.subtitle}>
+    <View className="flex-1 items-center justify-center p-6 bg-surface-secondary">
+      <Text className="text-[72px] font-bold text-white/20 mb-2 font-righteous">404</Text>
+      <Text className="text-lg font-semibold text-white mb-2 font-righteous">Page introuvable</Text>
+      <Text className="text-sm text-white/50 text-center mb-8 font-dmsans">
         Cette page n'existe pas ou a été déplacée.
       </Text>
       <TouchableOpacity
-        style={styles.button}
+        className="bg-surface-secondary border border-white/10 px-6 py-3 rounded-lg"
         onPress={() => router.replace('/')}
         activeOpacity={0.8}
       >
-        <Text style={styles.buttonText}>Retour à l'accueil</Text>
+        <Text className="text-label">Retour à l'accueil</Text>
       </TouchableOpacity>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#000000',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  code: {
-    fontSize: 72,
-    fontWeight: '700',
-    color: '#27272a',
-    marginBottom: 8,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#ffffff',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#71717a',
-    textAlign: 'center',
-    marginBottom: 32,
-  },
-  button: {
-    backgroundColor: '#27272a',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  buttonText: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-});

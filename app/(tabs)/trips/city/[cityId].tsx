@@ -1,57 +1,69 @@
 /**
  * app/(tabs)/trips/city/[cityId].tsx
  *
- * City detail page with tabs: Highlights, Budget, Practical
+ * City detail page with new interface: Hero map, tabs, category filters, TicketCards
  */
 
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
-  View,
+  Alert,
+  Animated,
+  Dimensions,
+  ImageBackground,
+  Linking,
+  ScrollView,
   Text,
   TouchableOpacity,
-  ScrollView,
-  Animated,
-  Easing,
-  Linking,
-  TextInput,
-  Modal,
-  Alert,
+  View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
-import {
-  ChevronLeft,
-  Building2,
-  Wallet,
-  Globe,
-  MapPin,
-  Star,
-  ExternalLink,
-  Loader2,
-  Smartphone,
-  Package,
-  Shield,
-  AlertTriangle,
-  Plus,
-  X,
-  Save,
-} from 'lucide-react-native';
-import { getCity } from '@/services/cityService';
+import {LinearGradient} from 'expo-linear-gradient';
+import MaskedView from '@react-native-masked-view/masked-view';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {useFocusEffect, useLocalSearchParams, useRouter} from 'expo-router';
+import {useTranslation} from 'react-i18next';
+import {getCity} from '@/services/cityService';
 import {
   createHighlight,
+  type CreateHighlightPayload,
+  deleteHighlight,
+  type HighlightUpdatePayload,
   updateHighlight,
   updateHighlightCoordinates,
-  deleteHighlight,
-  type CreateHighlightPayload,
-  type HighlightUpdatePayload,
 } from '@/services/cityReviewService';
-import { CityData, Highlight, HighlightCategory, PracticalInfo, HIGHLIGHT_CATEGORIES } from '@/types/api';
-import { CategoryFilterChips, CATEGORY_COLORS } from '@/components/city/CategoryFilterChips';
-import { HighlightCard } from '@/components/city/HighlightCard';
-import { CityBudgetCard } from '@/components/city/CityBudgetCard';
-import { CityHighlightsMap } from '@/components/city/CityHighlightsMap';
+import {CityData, Highlight, HIGHLIGHT_CATEGORIES, HighlightCategory} from '@/types/api';
+import {CityBudgetCard} from '@/components/city/CityBudgetCard';
+import {CityHighlightsMap} from '@/components/city/CityHighlightsMap';
+import {Navbar} from '@/components/navigation/Navbar';
+import {Pill} from '@/components/Pill';
+import {PracticalCard} from '@/components/PracticalCard';
+import {HighlightFormModal} from '@/components/city/HighlightFormModal';
+import {type ColorScheme, SecondaryButton} from '@/components/SecondaryButton';
+import {type CategoryType, TicketCard} from '@/components/TicketCard';
+import {PrimaryButton} from '@/components/PrimaryButton';
+import Loader from '@/components/Loader';
+import Icon from 'react-native-remix-icon';
 
 type TabKey = 'highlights' | 'budget' | 'practical';
+
+// -- Category to ColorScheme mapping -----------------------------------------
+
+const CATEGORY_TO_COLOR_SCHEME: Record<HighlightCategory, ColorScheme> = {
+  food: 'restaurant',
+  culture: 'culture',
+  nature: 'nature',
+  shopping: 'shopping',
+  nightlife: 'nightlife',
+  other: 'location',
+};
+
+const CATEGORY_ICONS: Record<HighlightCategory, string> = {
+  food: 'restaurant-line',
+  culture: 'bank-line',
+  nature: 'hand-heart-line',
+  shopping: 'shopping-bag-line',
+  nightlife: 'moon-line',
+  other: 'map-pin-line',
+};
 
 // -- Address geocoding helper -------------------------------------------------
 
@@ -62,8 +74,6 @@ async function geocodeAddress(
   const key = process.env.EXPO_PUBLIC_LOCATIONIQ_KEY;
   if (!key || !address.trim()) return null;
 
-  // Always include the city context — never geocode an address alone
-  // "Champs Elysées" alone resolves to Brazil; "Champs Elysées, Paris, France" resolves correctly
   const queries = [`${address.trim()}, ${cityContext}`];
 
   for (const query of queries) {
@@ -83,80 +93,22 @@ async function geocodeAddress(
   return null;
 }
 
-// -- SpinningLoader -----------------------------------------------------------
-
-function SpinningLoader({ size = 32, color = '#a855f7' }: { size?: number; color?: string }) {
-  const rotation = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.loop(
-      Animated.timing(rotation, {
-        toValue: 1,
-        duration: 1000,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      })
-    ).start();
-  }, []);
-
-  const spin = rotation.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
-
-  return (
-    <Animated.View style={{ transform: [{ rotate: spin }] }}>
-      <Loader2 size={size} color={color} />
-    </Animated.View>
-  );
-}
-
-// -- Tab Button ---------------------------------------------------------------
-
-function TabButton({
-  label,
-  icon: Icon,
-  isActive,
-  onPress,
-}: {
-  label: string;
-  icon: React.ComponentType<any>;
-  isActive: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <TouchableOpacity
-      onPress={onPress}
-      className="flex-1 py-3 flex-row items-center justify-center gap-1.5"
-      style={{
-        borderBottomWidth: 2,
-        borderBottomColor: isActive ? '#a855f7' : 'transparent',
-      }}
-    >
-      <Icon size={16} color={isActive ? '#a855f7' : '#71717a'} />
-      <Text
-        className={`text-sm font-medium ${
-          isActive ? 'text-purple-400' : 'text-zinc-500'
-        }`}
-      >
-        {label}
-      </Text>
-    </TouchableOpacity>
-  );
-}
-
 // -- Main Component -----------------------------------------------------------
 
 export default function CityDetailPage() {
   const router = useRouter();
   const { cityId } = useLocalSearchParams<{ cityId: string }>();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
 
   const [city, setCity] = useState<CityData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>('highlights');
   const [selectedCategories, setSelectedCategories] = useState<HighlightCategory[]>([]);
+  const [selectedMustSee, setSelectedMustSee] = useState<boolean | null>(null);
+  const [isMapExpanded, setIsMapExpanded] = useState(false);
+  const [approximateCount, setApproximateCount] = useState(0);
 
   // Add highlight state
   const [showAddModal, setShowAddModal] = useState(false);
@@ -177,6 +129,60 @@ export default function CityDetailPage() {
   const [editAddrStatus, setEditAddrStatus] = useState<null | 'loading' | 'found' | 'not_found'>(null);
   const [editAddrCoords, setEditAddrCoords] = useState<{ lat: number; lon: number } | null>(null);
 
+  // Map animation
+  const SCREEN_HEIGHT = Dimensions.get('window').height;
+  const MAP_DEFAULT_HEIGHT = 300;
+  const MAP_EXPANDED_HEIGHT = SCREEN_HEIGHT - 120;
+
+  const mapExpandAnim = useRef(new Animated.Value(MAP_DEFAULT_HEIGHT)).current;
+  const mapGradientOpacity = useRef(new Animated.Value(1)).current;
+
+  // Scroll-driven animations
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const scrollYJS = useRef(new Animated.Value(0)).current;
+  const outerScrollRef = useRef<Animated.ScrollView>(null);
+  const scrollContentHeight = useRef(0);
+  const scrollViewHeight = useRef(0);
+
+  const COLLAPSE_RANGE = 120;
+
+  const vibeAndStatsOpacity = scrollY.interpolate({
+    inputRange: [0, COLLAPSE_RANGE],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
+
+  const vibeAndStatsTranslateY = scrollY.interpolate({
+    inputRange: [0, COLLAPSE_RANGE],
+    outputRange: [0, -10],
+    extrapolate: 'clamp',
+  });
+
+  const vibeAndStatsMaxHeight = scrollYJS.interpolate({
+    inputRange: [0, COLLAPSE_RANGE],
+    outputRange: [80, 0],
+    extrapolate: 'clamp',
+  });
+
+  const toggleMapExpanded = useCallback(() => {
+    const expanding = !isMapExpanded;
+    setIsMapExpanded(expanding);
+    Animated.parallel([
+      Animated.spring(mapExpandAnim, {
+        toValue: expanding ? MAP_EXPANDED_HEIGHT : MAP_DEFAULT_HEIGHT,
+        damping: 20,
+        stiffness: 120,
+        mass: 0.8,
+        useNativeDriver: false,
+      }),
+      Animated.timing(mapGradientOpacity, {
+        toValue: expanding ? 0 : 1,
+        duration: 250,
+        useNativeDriver: false,
+      }),
+    ]).start();
+  }, [isMapExpanded, MAP_EXPANDED_HEIGHT]);
+
   // Load city data
   const loadCity = useCallback(async (showLoading = false) => {
     if (!cityId) return;
@@ -196,7 +202,7 @@ export default function CityDetailPage() {
     loadCity(true);
   }, [cityId]);
 
-  // Reload when page regains focus (returning from another screen)
+  // Reload when page regains focus
   useFocusEffect(
     useCallback(() => {
       if (!loading && cityId) {
@@ -205,59 +211,12 @@ export default function CityDetailPage() {
     }, [cityId, loading, loadCity])
   );
 
-  // Get highlights from city data
-  const highlights = useMemo(() => {
-    if (!city) return [];
-    return city.city_highlights || city.highlights || [];
-  }, [city]);
-
-  // Calculate category counts
-  const categoryCounts = useMemo(() => {
-    const counts: Record<HighlightCategory, number> = {
-      food: 0,
-      culture: 0,
-      nature: 0,
-      shopping: 0,
-      nightlife: 0,
-      other: 0,
-    };
-    highlights.forEach((h) => {
-      const cat = (h.category || 'other') as HighlightCategory;
-      counts[cat] = (counts[cat] || 0) + 1;
-    });
-    return counts;
-  }, [highlights]);
-
-  // Filter highlights by selected categories
-  const filteredHighlights = useMemo(() => {
-    if (selectedCategories.length === 0) return highlights;
-    return highlights.filter((h) =>
-      selectedCategories.includes((h.category || 'other') as HighlightCategory)
-    );
-  }, [highlights, selectedCategories]);
-
-  // Toggle category filter
-  const toggleCategory = useCallback((category: HighlightCategory) => {
-    setSelectedCategories((prev) => {
-      if (prev.includes(category)) {
-        return prev.filter((c) => c !== category);
-      }
-      return [...prev, category];
-    });
-  }, []);
-
-  // Get budget and practical info
-  const budget = city?.city_budgets?.[0] || city?.budget;
-  const practicalInfo =
-    city?.city_practical_info?.[0] || city?.practical_info;
-
   // Add new highlight
   const handleAddHighlight = useCallback(async () => {
     if (!cityId || !newHighlight.name.trim()) return;
 
     setAddingHighlight(true);
     try {
-      // Geocode address now if not already resolved
       let coords = addAddrCoords;
       const addr = newHighlight.address?.trim();
       if (addr && !coords && addAddrStatus !== 'not_found') {
@@ -272,7 +231,6 @@ export default function CityDetailPage() {
         latitude: coords?.lat,
         longitude: coords?.lon,
       });
-      // Add to local state
       setCity((prev) => {
         if (!prev) return prev;
         const existingHighlights = prev.city_highlights || prev.highlights || [];
@@ -282,13 +240,12 @@ export default function CityDetailPage() {
           highlights: [...existingHighlights, created],
         };
       });
-      // Reset form and close modal
       setNewHighlight({ name: '', category: 'other', address: '' });
       setAddAddrCoords(null);
       setAddAddrStatus(null);
       setShowAddModal(false);
     } catch (err: any) {
-      Alert.alert('Erreur', err.message || 'Impossible de créer le point');
+      Alert.alert(t('cityDetail.error'), err.message || t('cityDetail.cannotCreatePoint'));
     } finally {
       setAddingHighlight(false);
     }
@@ -320,7 +277,6 @@ export default function CityDetailPage() {
     try {
       const addressChanged = editForm.address !== editingHighlight.address;
 
-      // Geocode if address changed and not yet resolved
       let coords = editAddrCoords;
       if (addressChanged && editForm.address?.trim() && !coords && editAddrStatus !== 'not_found') {
         const cityContext = [city?.city_name, city?.country].filter(Boolean).join(', ');
@@ -329,12 +285,10 @@ export default function CityDetailPage() {
 
       await updateHighlight(editingHighlight.id, editForm);
 
-      // Update coordinates if address changed and coords found
       if (addressChanged && coords) {
         await updateHighlightCoordinates(editingHighlight.id, coords.lat, coords.lon);
       }
 
-      // Update local state
       setCity((prev) => {
         if (!prev) return prev;
         const updateHighlights = (hs: Highlight[]) =>
@@ -361,7 +315,7 @@ export default function CityDetailPage() {
       setEditAddrCoords(null);
       setEditAddrStatus(null);
     } catch (err: any) {
-      Alert.alert('Erreur', err.message || 'Impossible de modifier le point');
+      Alert.alert(t('cityDetail.error'), err.message || t('cityDetail.cannotEditPoint'));
     } finally {
       setSavingEdit(false);
     }
@@ -369,750 +323,555 @@ export default function CityDetailPage() {
 
   // Delete highlight
   const handleDeleteHighlight = useCallback(async (highlightId: string) => {
-    try {
-      await deleteHighlight(highlightId);
-      // Remove from local state
-      setCity((prev) => {
-        if (!prev) return prev;
-        const filterHighlights = (highlights: Highlight[]) =>
-          highlights.filter((h) => h.id !== highlightId);
-        return {
-          ...prev,
-          city_highlights: filterHighlights(prev.city_highlights || []),
-          highlights: filterHighlights(prev.highlights || []),
-        };
-      });
-    } catch (err: any) {
-      Alert.alert('Erreur', err.message || 'Impossible de supprimer le point');
+    Alert.alert(
+      t('cityDetail.delete'),
+      t('cityDetail.deleteConfirmMessage'),
+      [
+        { text: t('cityDetail.cancel'), style: 'cancel' },
+        {
+          text: t('cityDetail.deleteConfirm'),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteHighlight(highlightId);
+              setCity((prev) => {
+                if (!prev) return prev;
+                const filterHighlights = (highlights: Highlight[]) =>
+                  highlights.filter((h) => h.id !== highlightId);
+                return {
+                  ...prev,
+                  city_highlights: filterHighlights(prev.city_highlights || []),
+                  highlights: filterHighlights(prev.highlights || []),
+                };
+              });
+            } catch (err: any) {
+              Alert.alert(t('cityDetail.error'), err.message || t('cityDetail.cannotDeletePoint'));
+            }
+          },
+        },
+      ]
+    );
+  }, []);
+
+  // Open map for highlight
+  const handleOpenMap = useCallback((highlight: Highlight) => {
+    const lat = highlight.latitude;
+    const lon = highlight.longitude;
+    const label = encodeURIComponent(highlight.name);
+    
+    if (lat && lon) {
+      Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${lat},${lon}&query_place_id=${label}`);
+    } else if (highlight.address) {
+      Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(highlight.address)}`);
+    } else {
+      Alert.alert(t('cityDetail.error'), t('cityDetail.noLocationForPoint'));
     }
   }, []);
+
+  // Get highlights from city data
+  const highlights = useMemo(() => {
+    if (!city) return [];
+    return city.city_highlights || city.highlights || [];
+  }, [city]);
+
+  // Calculate category counts
+  const categoryCounts = useMemo(() => {
+    const counts: Record<HighlightCategory, number> = {
+      food: 0,
+      culture: 0,
+      nature: 0,
+      shopping: 0,
+      nightlife: 0,
+      other: 0,
+    };
+    highlights.forEach((h) => {
+      const cat = (h.category || 'other') as HighlightCategory;
+      counts[cat] = (counts[cat] || 0) + 1;
+    });
+    return counts;
+  }, [highlights]);
+
+  // Get available categories (those with count > 0)
+  const availableCategories = useMemo(() => {
+    return (Object.keys(HIGHLIGHT_CATEGORIES) as HighlightCategory[]).filter(
+      (cat) => categoryCounts[cat] > 0
+    );
+  }, [categoryCounts]);
+
+  // Calculate must see count
+  const mustSeeCount = useMemo(() => {
+    return highlights.filter((h) => h.is_must_see).length;
+  }, [highlights]);
+
+  // Check if filters should be shown (must see OR more than 1 category)
+  const showFilters = useMemo(() => {
+    return mustSeeCount > 0 || availableCategories.length > 1;
+  }, [availableCategories.length, mustSeeCount]);
+
+  // Check if category filters should be shown (more than 1 category)
+  const showCategoryFilters = useMemo(() => {
+    return availableCategories.length > 1;
+  }, [availableCategories.length]);
+
+  // Filter highlights by selected categories and must see
+  const filteredHighlights = useMemo(() => {
+    let result = highlights;
+
+    if (selectedMustSee !== null) {
+      result = result.filter((h) =>
+        selectedMustSee ? h.is_must_see : !h.is_must_see
+      );
+    }
+
+    if (selectedCategories.length > 0) {
+      result = result.filter((h) =>
+        selectedCategories.includes((h.category || 'other') as HighlightCategory)
+      );
+    }
+
+    return result;
+  }, [highlights, selectedCategories, selectedMustSee]);
+
+  // Toggle category filter
+  const toggleCategory = useCallback((category: HighlightCategory) => {
+    setSelectedCategories((prev) => {
+      if (prev.includes(category)) {
+        const newList = prev.filter((c) => c !== category);
+        return newList;
+      }
+      return [...prev, category];
+    });
+  }, []);
+
+  // Toggle must see filter
+  const toggleMustSee = useCallback(() => {
+    setSelectedMustSee((prev) => (prev === true ? null : true));
+  }, []);
+
+  // Get budget and practical info
+  const budget = city?.city_budgets?.[0] || city?.budget;
+  const practicalInfo = city?.city_practical_info?.[0] || city?.practical_info;
 
   // Loading state
   if (loading) {
     return (
-      <View
-        className="flex-1 bg-black items-center justify-center"
-        style={{ paddingTop: insets.top }}
+      <ImageBackground
+        source={require('@/assets/images/bg-gradient.png')}
+        className="flex-1"
+        resizeMode="cover"
       >
-        <SpinningLoader size={32} color="#a855f7" />
-      </View>
+        <View className="center-content" style={{ paddingTop: insets.top }}>
+          <Loader size={48} />
+        </View>
+      </ImageBackground>
     );
   }
 
   // Error state
   if (error || !city) {
     return (
-      <View
-        className="flex-1 bg-black items-center justify-center"
-        style={{ paddingTop: insets.top }}
+      <ImageBackground
+        source={require('@/assets/images/bg-gradient.png')}
+        className="flex-1"
+        resizeMode="cover"
       >
-        <Text className="text-red-400">{error || 'City not found'}</Text>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          className="mt-4 px-4 py-2 bg-zinc-800 rounded-lg"
-        >
-          <Text className="text-white">Go back</Text>
-        </TouchableOpacity>
-      </View>
+        <View className="center-content px-4" style={{ paddingTop: insets.top }}>
+          <Text className="text-zinc-400 text-sm mb-4 font-dmsans">{error || t('cityDetail.cityNotFound')}</Text>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            className="bg-zinc-800 px-6 py-3 rounded-lg"
+          >
+            <Text className="text-label">{t('cityDetail.back')}</Text>
+          </TouchableOpacity>
+        </View>
+      </ImageBackground>
     );
   }
 
+  // Get vibe tag for the pill
+  const vibeTag = city.vibe_tags?.[0] || city.vibe || null;
+
   return (
-    <View className="flex-1 bg-black">
-      {/* Header */}
-      <View
-        className="px-4 pb-4 border-b border-zinc-800"
-        style={{ paddingTop: insets.top + 8 }}
+    <ImageBackground
+      source={require('@/assets/images/bg-gradient.png')}
+      className="flex-1"
+      resizeMode="cover"
+    >
+      {/* Floating Back Button */}
+      <TouchableOpacity
+        onPress={() => router.back()}
+        style={{
+          position: 'absolute',
+          top: insets.top + 12,
+          left: 16,
+          zIndex: 50,
+          width: 40,
+          height: 40,
+          borderRadius: 20,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          alignItems: 'center',
+          justifyContent: 'center',
+          paddingRight: 2
+        }}
       >
-        {/* Top row: Back */}
-        <View className="flex-row items-center mb-3">
-          <TouchableOpacity
-            onPress={() => router.back()}
-            className="flex-row items-center gap-1"
-          >
-            <ChevronLeft size={24} color="#fff" />
-            <Text className="text-white">Back</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* City info */}
-        <View className="flex-row items-start gap-3">
-          <View className="w-12 h-12 bg-purple-500/20 rounded-full items-center justify-center">
-            <Building2 size={24} color="#a855f7" />
-          </View>
-          <View className="flex-1">
-            <Text className="text-white text-xl font-bold" numberOfLines={2}>
-              {city.city_title}
-            </Text>
-            <View className="flex-row items-center gap-2 mt-1">
-              <MapPin size={14} color="#71717a" />
-              <Text className="text-zinc-400 text-sm">
-                {city.city_name}, {city.country}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Vibe tags */}
-        {city.vibe_tags && city.vibe_tags.length > 0 && (
-          <View className="flex-row flex-wrap gap-2 mt-3">
-            {city.vibe_tags.map((tag, idx) => (
-              <View
-                key={idx}
-                className="px-2 py-1 bg-purple-500/20 rounded-full"
-              >
-                <Text className="text-purple-400 text-xs">{tag}</Text>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {/* Stats row */}
-        <View className="flex-row items-center gap-4 mt-3">
-          <View className="flex-row items-center gap-1.5">
-            <Star size={16} color="#a855f7" />
-            <Text className="text-zinc-300 text-sm">
-              {highlights.length} highlights
-            </Text>
-          </View>
-          {city.content_creator_handle && (
-            <TouchableOpacity
-              onPress={() => {
-                if (city.source_url) Linking.openURL(city.source_url);
-              }}
-              className="flex-row items-center gap-1.5"
-            >
-              <Text className="text-zinc-500 text-sm">
-                @{city.content_creator_handle}
-              </Text>
-              <ExternalLink size={12} color="#71717a" />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Tab navigation */}
-        <View className="flex-row mt-4 border-b border-zinc-800 -mx-4 px-4">
-          <TabButton
-            label="Highlights"
-            icon={Star}
-            isActive={activeTab === 'highlights'}
-            onPress={() => setActiveTab('highlights')}
-          />
-          <TabButton
-            label="Budget"
-            icon={Wallet}
-            isActive={activeTab === 'budget'}
-            onPress={() => setActiveTab('budget')}
-          />
-          <TabButton
-            label="Practical"
-            icon={Globe}
-            isActive={activeTab === 'practical'}
-            onPress={() => setActiveTab('practical')}
-          />
-        </View>
-      </View>
+        <Icon name={"arrow-left-s-line"} size={24} color="#fff" />
+      </TouchableOpacity>
 
       {/* Content */}
-      <ScrollView
-        className="flex-1"
-        contentContainerStyle={{ paddingBottom: 100 }}
-      >
-        {activeTab === 'highlights' && (
-          <HighlightsTab
-            highlights={filteredHighlights}
-            allHighlights={highlights}
-            categoryCounts={categoryCounts}
-            selectedCategories={selectedCategories}
-            onToggleCategory={toggleCategory}
-            cityName={city.city_name}
-            country={city.country}
-            cityLat={city.latitude}
-            cityLon={city.longitude}
-            onAddHighlight={() => setShowAddModal(true)}
-            onEditHighlight={handleOpenEdit}
-            onDeleteHighlight={handleDeleteHighlight}
-          />
-        )}
-        {activeTab === 'budget' && budget && <BudgetTab budget={budget} />}
-        {activeTab === 'practical' && practicalInfo && (
-          <PracticalTab info={practicalInfo} />
-        )}
-      </ScrollView>
+      <View style={{ flex: 1 }}>
+        {/* Hero Map with gradient mask */}
+        <Animated.View style={{ width: '100%', height: mapExpandAnim }}>
+          <Animated.View style={{ flex: 1, opacity: mapGradientOpacity }}>
+            <MaskedView
+              style={{ width: '100%', height: '100%' }}
+              maskElement={
+                <LinearGradient
+                  colors={['#000', '#000', '#000', 'transparent']}
+                  locations={[0, 0.6, 0.75, 1]}
+                  style={{ flex: 1 }}
+                />
+              }
+            >
+              <CityHighlightsMap
+                highlights={highlights}
+                cityName={city.city_name}
+                country={city.country}
+                cityLat={city.latitude}
+                cityLon={city.longitude}
+                selectedCategories={selectedCategories}
+                height={MAP_DEFAULT_HEIGHT}
+                hideApproximateBadge
+                onApproximateCount={setApproximateCount}
+              />
+            </MaskedView>
+          </Animated.View>
 
-      {/* Add Highlight Modal */}
-      <Modal
-        visible={showAddModal}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setShowAddModal(false)}
-      >
-        <View className="flex-1 justify-end" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
+          {/* Map shown without gradient when expanded */}
+          {isMapExpanded && (
+            <View style={{ position: 'absolute', inset: 0 }}>
+              <CityHighlightsMap
+                highlights={highlights}
+                cityName={city.city_name}
+                country={city.country}
+                cityLat={city.latitude}
+                cityLon={city.longitude}
+                selectedCategories={selectedCategories}
+                height={MAP_EXPANDED_HEIGHT}
+                hideApproximateBadge
+                onApproximateCount={setApproximateCount}
+              />
+            </View>
+          )}
+
+          {/* Approximate badge + Expand/collapse button row */}
           <View
-            className="bg-zinc-900 rounded-t-3xl p-4"
-            style={{ paddingBottom: insets.bottom + 16 }}
+            style={{
+              position: 'absolute',
+              bottom: isMapExpanded ? insets.top + 16 : 28,
+              right: 14,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 8,
+            }}
           >
-            {/* Header */}
-            <View className="flex-row items-center justify-between mb-4">
-              <Text className="text-lg font-bold text-white">Ajouter un point</Text>
-              <TouchableOpacity onPress={() => setShowAddModal(false)} className="p-2">
-                <X size={20} color="#71717a" />
-              </TouchableOpacity>
-            </View>
-
-            {/* Form */}
-            <View className="gap-4">
-              {/* Name */}
-              <View>
-                <Text className="text-xs text-zinc-500 uppercase mb-1">Nom *</Text>
-                <TextInput
-                  value={newHighlight.name}
-                  onChangeText={(v) => setNewHighlight((f) => ({ ...f, name: v }))}
-                  placeholder="Ex: Tour Eiffel, Cafe de Flore..."
-                  placeholderTextColor="#52525b"
-                  className="rounded-lg px-3 py-3 text-white"
-                  style={{ backgroundColor: '#27272a', borderWidth: 1, borderColor: '#3f3f46' }}
-                />
-              </View>
-
-              {/* Category */}
-              <View>
-                <Text className="text-xs text-zinc-500 uppercase mb-1">Catégorie</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  <View className="flex-row gap-2">
-                    {(Object.keys(HIGHLIGHT_CATEGORIES) as HighlightCategory[]).map((cat) => {
-                      const isSelected = newHighlight.category === cat;
-                      const catColor = CATEGORY_COLORS[cat];
-                      return (
-                        <TouchableOpacity
-                          key={cat}
-                          onPress={() => setNewHighlight((f) => ({ ...f, category: cat }))}
-                          className="px-3 py-2 rounded-lg"
-                          style={{
-                            backgroundColor: isSelected ? `${catColor}33` : '#27272a',
-                            borderWidth: 1,
-                            borderColor: isSelected ? `${catColor}4D` : '#3f3f46',
-                          }}
-                        >
-                          <Text style={{ fontSize: 13, color: isSelected ? catColor : '#a1a1aa' }}>
-                            {HIGHLIGHT_CATEGORIES[cat].label}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                </ScrollView>
-              </View>
-
-              {/* Address */}
-              <View>
-                <Text className="text-xs text-zinc-500 uppercase mb-1">Adresse</Text>
-                <TextInput
-                  value={newHighlight.address ?? ''}
-                  onChangeText={(v) => {
-                    setNewHighlight((f) => ({ ...f, address: v }));
-                    setAddAddrCoords(null);
-                    setAddAddrStatus(null);
-                  }}
-                  onEndEditing={(e) => {
-                    const addr = e.nativeEvent.text.trim();
-                    if (!addr || !city) return;
-                    setAddAddrStatus('loading');
-                    const ctx = [city.city_name, city.country].filter(Boolean).join(', ');
-                    geocodeAddress(addr, ctx).then((coords) => {
-                      setAddAddrCoords(coords);
-                      setAddAddrStatus(coords ? 'found' : 'not_found');
-                    });
-                  }}
-                  placeholder="Ex: 15 rue de Rivoli, Paris"
-                  placeholderTextColor="#52525b"
-                  className="rounded-lg px-3 py-3 text-white"
-                  style={{
-                    backgroundColor: '#27272a',
-                    borderWidth: 1,
-                    borderColor:
-                      addAddrStatus === 'found'
-                        ? '#22c55e66'
-                        : addAddrStatus === 'not_found'
-                        ? '#f59e0b66'
-                        : '#3f3f46',
-                  }}
-                />
-                {addAddrStatus === 'loading' && (
-                  <Text style={{ fontSize: 11, color: '#71717a', marginTop: 4 }}>
-                    Vérification de l'adresse...
-                  </Text>
-                )}
-                {addAddrStatus === 'found' && (
-                  <Text style={{ fontSize: 11, color: '#22c55e', marginTop: 4 }}>
-                    ✓ Position localisée
-                  </Text>
-                )}
-                {addAddrStatus === 'not_found' && (
-                  <Text style={{ fontSize: 11, color: '#f59e0b', marginTop: 4 }}>
-                    ⚠ Adresse non trouvée – sera localisée automatiquement
-                  </Text>
-                )}
-              </View>
-
-              {/* Submit */}
-              <TouchableOpacity
-                onPress={handleAddHighlight}
-                disabled={addingHighlight || !newHighlight.name.trim() || addAddrStatus === 'loading'}
-                className="flex-row items-center justify-center gap-2 py-3 rounded-xl mt-2"
+            {/* Approximate badge */}
+            {approximateCount > 0 && (
+              <View
                 style={{
-                  backgroundColor: '#a855f7',
-                  opacity: !newHighlight.name.trim() ? 0.5 : 1,
-                }}
-              >
-                {addingHighlight ? (
-                  <SpinningLoader size={16} color="#fff" />
-                ) : (
-                  <Plus size={18} color="#fff" />
-                )}
-                <Text className="text-white font-medium">Ajouter</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Edit Highlight Modal */}
-      <Modal
-        visible={showEditModal}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setShowEditModal(false)}
-      >
-        <View className="flex-1 justify-end" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
-          <ScrollView
-            className="bg-zinc-900 rounded-t-3xl"
-            style={{ maxHeight: '80%' }}
-            contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 16 }}
-          >
-            {/* Header */}
-            <View className="flex-row items-center justify-between mb-4">
-              <Text className="text-lg font-bold text-white">Modifier le point</Text>
-              <TouchableOpacity onPress={() => setShowEditModal(false)} className="p-2">
-                <X size={20} color="#71717a" />
-              </TouchableOpacity>
-            </View>
-
-            {/* Form */}
-            <View className="gap-4">
-              {/* Name */}
-              <View>
-                <Text className="text-xs text-zinc-500 uppercase mb-1">Nom *</Text>
-                <TextInput
-                  value={editForm.name ?? ''}
-                  onChangeText={(v) => setEditForm((f) => ({ ...f, name: v }))}
-                  placeholder="Nom du point"
-                  placeholderTextColor="#52525b"
-                  className="rounded-lg px-3 py-3 text-white"
-                  style={{ backgroundColor: '#27272a', borderWidth: 1, borderColor: '#3f3f46' }}
-                />
-              </View>
-
-              {/* Category */}
-              <View>
-                <Text className="text-xs text-zinc-500 uppercase mb-1">Catégorie</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  <View className="flex-row gap-2">
-                    {(Object.keys(HIGHLIGHT_CATEGORIES) as HighlightCategory[]).map((cat) => {
-                      const isSelected = editForm.category === cat;
-                      const catColor = CATEGORY_COLORS[cat];
-                      return (
-                        <TouchableOpacity
-                          key={cat}
-                          onPress={() => setEditForm((f) => ({ ...f, category: cat }))}
-                          className="px-3 py-2 rounded-lg"
-                          style={{
-                            backgroundColor: isSelected ? `${catColor}33` : '#27272a',
-                            borderWidth: 1,
-                            borderColor: isSelected ? `${catColor}4D` : '#3f3f46',
-                          }}
-                        >
-                          <Text style={{ fontSize: 13, color: isSelected ? catColor : '#a1a1aa' }}>
-                            {HIGHLIGHT_CATEGORIES[cat].label}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                </ScrollView>
-              </View>
-
-              {/* Subtype */}
-              <View>
-                <Text className="text-xs text-zinc-500 uppercase mb-1">Sous-type</Text>
-                <TextInput
-                  value={editForm.subtype ?? ''}
-                  onChangeText={(v) => setEditForm((f) => ({ ...f, subtype: v || undefined }))}
-                  placeholder="Ex: Restaurant italien..."
-                  placeholderTextColor="#52525b"
-                  className="rounded-lg px-3 py-3 text-white"
-                  style={{ backgroundColor: '#27272a', borderWidth: 1, borderColor: '#3f3f46' }}
-                />
-              </View>
-
-              {/* Address */}
-              <View>
-                <Text className="text-xs text-zinc-500 uppercase mb-1">Adresse</Text>
-                <TextInput
-                  value={editForm.address ?? ''}
-                  onChangeText={(v) => {
-                    setEditForm((f) => ({ ...f, address: v || undefined }));
-                    setEditAddrCoords(null);
-                    setEditAddrStatus(null);
-                  }}
-                  onEndEditing={(e) => {
-                    const addr = e.nativeEvent.text.trim();
-                    if (!addr || !city) return;
-                    // Only geocode if address actually changed
-                    if (addr === editingHighlight?.address) return;
-                    setEditAddrStatus('loading');
-                    const ctx = [city.city_name, city.country].filter(Boolean).join(', ');
-                    geocodeAddress(addr, ctx).then((coords) => {
-                      setEditAddrCoords(coords);
-                      setEditAddrStatus(coords ? 'found' : 'not_found');
-                    });
-                  }}
-                  placeholder="Ex: 15 rue de Rivoli, Paris"
-                  placeholderTextColor="#52525b"
-                  className="rounded-lg px-3 py-3 text-white"
-                  style={{
-                    backgroundColor: '#27272a',
-                    borderWidth: 1,
-                    borderColor:
-                      editAddrStatus === 'found'
-                        ? '#22c55e66'
-                        : editAddrStatus === 'not_found'
-                        ? '#f59e0b66'
-                        : '#3f3f46',
-                  }}
-                />
-                {editAddrStatus === 'loading' && (
-                  <Text style={{ fontSize: 11, color: '#71717a', marginTop: 4 }}>
-                    Vérification de l'adresse...
-                  </Text>
-                )}
-                {editAddrStatus === 'found' && (
-                  <Text style={{ fontSize: 11, color: '#22c55e', marginTop: 4 }}>
-                    ✓ Position localisée
-                  </Text>
-                )}
-                {editAddrStatus === 'not_found' && (
-                  <Text style={{ fontSize: 11, color: '#f59e0b', marginTop: 4 }}>
-                    ⚠ Adresse non trouvée – sera localisée automatiquement
-                  </Text>
-                )}
-              </View>
-
-              {/* Description */}
-              <View>
-                <Text className="text-xs text-zinc-500 uppercase mb-1">Description</Text>
-                <TextInput
-                  value={editForm.description ?? ''}
-                  onChangeText={(v) => setEditForm((f) => ({ ...f, description: v || undefined }))}
-                  placeholder="Optionnel"
-                  placeholderTextColor="#52525b"
-                  multiline
-                  numberOfLines={3}
-                  className="rounded-lg px-3 py-3 text-white"
-                  style={{
-                    backgroundColor: '#27272a',
-                    borderWidth: 1,
-                    borderColor: '#3f3f46',
-                    textAlignVertical: 'top',
-                    minHeight: 80,
-                  }}
-                />
-              </View>
-
-              {/* Tips */}
-              <View>
-                <Text className="text-xs text-zinc-500 uppercase mb-1">Conseils</Text>
-                <TextInput
-                  value={editForm.tips ?? ''}
-                  onChangeText={(v) => setEditForm((f) => ({ ...f, tips: v || undefined }))}
-                  placeholder="Optionnel"
-                  placeholderTextColor="#52525b"
-                  multiline
-                  numberOfLines={2}
-                  className="rounded-lg px-3 py-3 text-white"
-                  style={{
-                    backgroundColor: '#27272a',
-                    borderWidth: 1,
-                    borderColor: '#3f3f46',
-                    textAlignVertical: 'top',
-                    minHeight: 60,
-                  }}
-                />
-              </View>
-
-              {/* Must-see toggle */}
-              <TouchableOpacity
-                onPress={() => setEditForm((f) => ({ ...f, is_must_see: !f.is_must_see }))}
-                className="flex-row items-center gap-2 px-3 py-2 rounded-lg self-start"
-                style={{
-                  backgroundColor: editForm.is_must_see ? '#eab3081A' : '#27272a',
+                  backgroundColor: 'rgba(245, 158, 11, 0.2)',
                   borderWidth: 1,
-                  borderColor: editForm.is_must_see ? '#eab3084D' : '#3f3f46',
+                  borderColor: 'rgba(245, 158, 11, 0.3)',
+                  borderRadius: 10,
+                  paddingHorizontal: 8,
+                  paddingVertical: 6,
                 }}
               >
-                <Star
-                  size={14}
-                  color={editForm.is_must_see ? '#facc15' : '#71717a'}
-                  fill={editForm.is_must_see ? '#facc15' : 'none'}
-                />
-                <Text style={{ fontSize: 12, color: editForm.is_must_see ? '#fde68a' : '#71717a' }}>
-                  Incontournable
+                <Text className="font-dmsans" style={{ color: '#fbbf24', fontSize: 10 }}>
+                  ⚠️ {approximateCount} {t('cityDetail.approx')}
                 </Text>
-              </TouchableOpacity>
+              </View>
+            )}
 
-              {/* Submit */}
+            {/* Expand/collapse button */}
+            {highlights.length > 0 && (
               <TouchableOpacity
-                onPress={handleSaveEdit}
-                disabled={savingEdit || !editForm.name?.trim() || editAddrStatus === 'loading'}
-                className="flex-row items-center justify-center gap-2 py-3 rounded-xl mt-2"
+                onPress={toggleMapExpanded}
                 style={{
-                  backgroundColor: '#a855f7',
-                  opacity: !editForm.name?.trim() ? 0.5 : 1,
+                  width: 34,
+                  height: 34,
+                  borderRadius: 10,
+                  backgroundColor: 'rgba(0,0,0,0.55)',
+                  borderWidth: 1,
+                  borderColor: 'rgba(255,255,255,0.15)',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                 }}
               >
-                {savingEdit ? (
-                  <SpinningLoader size={16} color="#fff" />
-                ) : (
-                  <Save size={18} color="#fff" />
-                )}
-                <Text className="text-white font-medium">Enregistrer</Text>
+                {isMapExpanded
+                  ? <Icon name={"fullscreen-exit-line"} size={15} color="#fff" />
+                  : <Icon name={"fullscreen-line"} size={15} color="#fff" />
+                }
               </TouchableOpacity>
-            </View>
-          </ScrollView>
-        </View>
-      </Modal>
-    </View>
-  );
-}
-
-// -- Highlights Tab -----------------------------------------------------------
-
-function HighlightsTab({
-  highlights,
-  allHighlights,
-  categoryCounts,
-  selectedCategories,
-  onToggleCategory,
-  cityName,
-  country,
-  cityLat,
-  cityLon,
-  onAddHighlight,
-  onEditHighlight,
-  onDeleteHighlight,
-}: {
-  highlights: Highlight[];
-  allHighlights: Highlight[];
-  categoryCounts: Record<HighlightCategory, number>;
-  selectedCategories: HighlightCategory[];
-  onToggleCategory: (cat: HighlightCategory) => void;
-  cityName: string;
-  country?: string;
-  cityLat?: number;
-  cityLon?: number;
-  onAddHighlight: () => void;
-  onEditHighlight: (highlight: Highlight) => void;
-  onDeleteHighlight: (highlightId: string) => void;
-}) {
-  return (
-    <View>
-      {/* Map with geocoding - always show, will geocode missing coords */}
-      <View className="px-4 pt-4">
-        <CityHighlightsMap
-          highlights={allHighlights}
-          cityName={cityName}
-          country={country}
-          cityLat={cityLat}
-          cityLon={cityLon}
-          selectedCategories={selectedCategories}
-          height={180}
-        />
-      </View>
-
-      {/* Category filters */}
-      <CategoryFilterChips
-        selectedCategories={selectedCategories}
-        categoryCounts={categoryCounts}
-        onToggle={onToggleCategory}
-      />
-
-      {/* Highlights list */}
-      <View className="px-4 gap-3 mt-2">
-        {highlights.map((highlight) => (
-          <HighlightCard
-            key={highlight.id}
-            highlight={highlight}
-            editable
-            onEdit={() => onEditHighlight(highlight)}
-            onDelete={() => onDeleteHighlight(highlight.id)}
-          />
-        ))}
-
-        {highlights.length === 0 && (
-          <View className="py-8 items-center">
-            <Text className="text-zinc-500">No highlights in this category</Text>
+            )}
           </View>
-        )}
+        </Animated.View>
 
-        {/* Add highlight button */}
-        <TouchableOpacity
-          onPress={onAddHighlight}
-          className="flex-row items-center justify-center gap-2 py-3 rounded-xl mt-2"
+        {/* Title */}
+        <View className="px-8 mt-2">
+          <Text
+            style={{ fontFamily: 'Righteous', fontSize: 24, color: '#FAFAFF' }}
+            numberOfLines={2}
+          >
+            {city.city_title || city.city_name}
+          </Text>
+        </View>
+
+        {/* Vibe Pill - with scroll animation */}
+        <Animated.View
           style={{
-            backgroundColor: '#27272a',
-            borderWidth: 1,
-            borderColor: '#3f3f46',
-            borderStyle: 'dashed',
+            maxHeight: vibeAndStatsMaxHeight,
+            overflow: 'hidden',
           }}
         >
-          <Plus size={18} color="#a855f7" />
-          <Text className="text-purple-400 font-medium">Ajouter un point</Text>
-        </TouchableOpacity>
+          <Animated.View
+            style={{
+              opacity: vibeAndStatsOpacity,
+              transform: [{ translateY: vibeAndStatsTranslateY }],
+            }}
+          >
+            {vibeTag && (
+              <View className="px-8 mt-4 flex-row">
+                <Pill
+                  label={vibeTag}
+                  backgroundColor="#306A9F"
+                  textColor="#C7E0F8"
+                />
+              </View>
+            )}
+          </Animated.View>
+        </Animated.View>
+
+        {/* Navbar */}
+        <View className="px-4 mt-8">
+          <Navbar
+            variant="secondary"
+            size="sm"
+            tabs={[
+              { icon: 'star-line', label: t('cityDetail.highlights') },
+              { icon: 'money-dollar-circle-line', label: t('cityDetail.budget') },
+              { icon: 'compass-line', label: t('cityDetail.practical') },
+            ]}
+            activeIndex={activeTab === 'highlights' ? 0 : activeTab === 'budget' ? 1 : 2}
+            onTabChange={(index) => {
+              const tabs: TabKey[] = ['highlights', 'budget', 'practical'];
+              setActiveTab(tabs[index]);
+            }}
+          />
+        </View>
+
+        {/* Tab Content */}
+        <Animated.ScrollView
+          ref={outerScrollRef}
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingBottom: insets.bottom + 80, paddingTop: 24 }}
+          showsVerticalScrollIndicator={false}
+          scrollEventThrottle={16}
+          onLayout={(e) => {
+            scrollViewHeight.current = e.nativeEvent.layout.height;
+          }}
+          onContentSizeChange={(_, h) => {
+            scrollContentHeight.current = h;
+          }}
+          onScroll={(e: any) => {
+            const y = e.nativeEvent.contentOffset.y;
+            const isScrollable = scrollContentHeight.current > scrollViewHeight.current;
+            const effectiveY = isScrollable ? Math.max(0, y) : 0;
+            scrollY.setValue(effectiveY);
+            scrollYJS.setValue(effectiveY);
+          }}
+        >
+          {/* Highlights Tab */}
+          {activeTab === 'highlights' && (
+            <View style={{ paddingHorizontal: 16 }}>
+              {/* Category Filters with SecondaryButton */}
+              {showFilters && (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ gap: 8, paddingBottom: 16 }}
+                >
+                  {/* Must See Filter */}
+                  {mustSeeCount > 0 && (
+                    <SecondaryButton
+                      title={String(mustSeeCount)}
+                      leftIcon="star-line"
+                      colorScheme="mustsee"
+                      active={selectedMustSee === true}
+                      onPress={toggleMustSee}
+                    />
+                  )}
+                  {/* Category Filters - only show if more than 1 category */}
+                  {showCategoryFilters && availableCategories.map((cat) => {
+                    const count = categoryCounts[cat];
+                    const isActive = selectedCategories.includes(cat);
+                    return (
+                      <SecondaryButton
+                        key={cat}
+                        title={String(count)}
+                        leftIcon={CATEGORY_ICONS[cat]}
+                        colorScheme={CATEGORY_TO_COLOR_SCHEME[cat]}
+                        active={isActive}
+                        onPress={() => toggleCategory(cat)}
+                      />
+                    );
+                  })}
+                </ScrollView>
+              )}
+
+              {/* TicketCard List */}
+              <View style={{ gap: 12 }}>
+                {filteredHighlights.map((highlight) => (
+                  <View key={highlight.id} style={{ flexDirection: 'row', alignItems: 'stretch', gap: 8 }}>
+                    <View style={{ flex: 1 }}>
+                      <TicketCard
+                        category={(highlight.category || 'other') as CategoryType}
+                        title={highlight.name}
+                        price={
+                          highlight.price_range === 'free' || highlight.price_range === 'gratuit'
+                            ? 'free'
+                            : highlight.price_range
+                              ? parseInt(highlight.price_range.replace(/[^0-9]/g, '')) || 0
+                              : 0
+                        }
+                        tags={highlight.subtype ? [highlight.subtype] : []}
+                        description={highlight.description || t('cityDetail.noDescription')}
+                        tip={highlight.tips}
+                        isMustSee={highlight.is_must_see}
+                        colorScheme={CATEGORY_TO_COLOR_SCHEME[highlight.category || 'other']}
+                      />
+                    </View>
+                    {/* Action buttons column */}
+                    <View style={{ flexDirection: 'column', alignItems: 'center', justifyContent: 'space-evenly' }}>
+                      <TouchableOpacity
+                        onPress={() => handleOpenMap(highlight)}
+                        style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: 16,
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                        }}
+                      >
+                        {/* Inverser horizontalement l'icône en appliquant scaleX: -1 */}
+                        <Icon name="navigation-line" size={17} color="#1084FE" style={{ transform: [{ scaleX: -1 }] }} />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => handleOpenEdit(highlight)}
+                        style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: 16,
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <Icon name="pencil-line" size={17} color="rgba(255, 255, 255, 0.4)" />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => handleDeleteHighlight(highlight.id)}
+                        style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: 16,
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <Icon name="delete-bin-line" size={17} color="rgba(255, 144, 144, 0.4)" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+
+                {filteredHighlights.length === 0 && (
+                  <View className="empty-state">
+                    <Icon name={"information-2-fill"} size={32} color="#a1a1aa" style={{ opacity: 1 }} />
+                    <Text className="text-sm text-zinc-400 mt-2 font-dmsans">{t('cityDetail.noPointsFound')}</Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Add highlight button */}
+              <View style={{ marginTop: 16, marginBottom: 16 }}>
+                <PrimaryButton
+                  title={t('cityDetail.addHighlight')}
+                  leftIcon="add-line"
+                  color="purple"
+                  size="sm"
+                  fullWidth
+                  onPress={() => setShowAddModal(true)}
+                  style={{ opacity: 0.8 }}
+                />
+              </View>
+            </View>
+          )}
+
+          {/* Budget Tab */}
+          {activeTab === 'budget' && (
+            <View className="px-4 pt-4 pb-6">
+              {budget ? (
+                <CityBudgetCard budget={budget} />
+              ) : (
+                <View className="empty-state">
+                  <Icon name={"information-2-fill"} size={32} color="#a1a1aa" style={{ opacity: 1 }} />
+                  <Text className="text-sm text-zinc-400 mt-2 font-dmsans">{t('cityDetail.noBudgetInfo')}</Text>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* Practical Tab */}
+          {activeTab === 'practical' && (
+            <View className="px-4 pt-4 pb-6">
+              {!practicalInfo ? (
+                <PracticalCard info={practicalInfo} />
+              ) : (
+                <View className="empty-state">
+                  <Icon name={"information-2-fill"} size={32} color="#a1a1aa" style={{ opacity: 1 }} />
+                  <Text className="text-sm text-zinc-400 mt-2 font-dmsans">{t('cityDetail.noPracticalInfo')}</Text>
+                </View>
+              )}
+            </View>
+          )}
+        </Animated.ScrollView>
       </View>
-    </View>
+
+      {/* Add Highlight Modal */}
+      <HighlightFormModal
+        visible={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        title={t('cityDetail.addPoint')}
+        form={newHighlight}
+        setForm={setNewHighlight}
+        addressStatus={addAddrStatus}
+        onSubmit={handleAddHighlight}
+        submitting={addingHighlight}
+        submitLabel={t('cityDetail.add')}
+      />
+
+      {/* Edit Highlight Modal */}
+      <HighlightFormModal
+        visible={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        title={t('cityDetail.editPoint')}
+        form={editForm}
+        setForm={setEditForm}
+        addressStatus={editAddrStatus}
+        onSubmit={handleSaveEdit}
+        submitting={savingEdit}
+        submitLabel={t('cityDetail.save')}
+      />
+    </ImageBackground>
   );
 }
 
-// -- Budget Tab ---------------------------------------------------------------
-
-function BudgetTab({ budget }: { budget: any }) {
-  return (
-    <View className="px-4 pt-4">
-      <CityBudgetCard budget={budget} />
-    </View>
-  );
-}
-
-// -- Practical Tab ------------------------------------------------------------
-
-function PracticalTab({ info }: { info: PracticalInfo }) {
-  return (
-    <View className="px-4 pt-4 gap-4">
-      {/* Essential info */}
-      <View
-        className="bg-zinc-900 rounded-xl p-4"
-        style={{ borderWidth: 1, borderColor: '#27272a' }}
-      >
-        <Text className="text-white font-semibold mb-3">Essential Info</Text>
-        <View className="gap-3">
-          {info.visa_required !== undefined && (
-            <View className="flex-row items-center justify-between">
-              <Text className="text-zinc-400">Visa</Text>
-              <Text
-                className={
-                  info.visa_required ? 'text-orange-400' : 'text-green-400'
-                }
-              >
-                {info.visa_required ? 'Required' : 'Not required'}
-              </Text>
-            </View>
-          )}
-          {info.local_currency && (
-            <View className="flex-row items-center justify-between">
-              <Text className="text-zinc-400">Currency</Text>
-              <Text className="text-white">{info.local_currency}</Text>
-            </View>
-          )}
-          {info.language && (
-            <View className="flex-row items-center justify-between">
-              <Text className="text-zinc-400">Language</Text>
-              <Text className="text-white">{info.language}</Text>
-            </View>
-          )}
-        </View>
-      </View>
-
-      {/* Apps */}
-      {info.best_apps && info.best_apps.length > 0 && (
-        <View
-          className="bg-zinc-900 rounded-xl p-4"
-          style={{ borderWidth: 1, borderColor: '#27272a' }}
-        >
-          <View className="flex-row items-center gap-2 mb-3">
-            <Smartphone size={18} color="#3b82f6" />
-            <Text className="text-white font-semibold">Useful Apps</Text>
-          </View>
-          <View className="flex-row flex-wrap gap-2">
-            {info.best_apps.map((app, idx) => (
-              <View key={idx} className="px-3 py-1.5 bg-blue-500/20 rounded-full">
-                <Text className="text-blue-400 text-sm">{app}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-      )}
-
-      {/* What to pack */}
-      {info.what_to_pack && info.what_to_pack.length > 0 && (
-        <View
-          className="bg-zinc-900 rounded-xl p-4"
-          style={{ borderWidth: 1, borderColor: '#27272a' }}
-        >
-          <View className="flex-row items-center gap-2 mb-3">
-            <Package size={18} color="#a855f7" />
-            <Text className="text-white font-semibold">What to Pack</Text>
-          </View>
-          <View className="flex-row flex-wrap gap-2">
-            {info.what_to_pack.map((item, idx) => (
-              <View key={idx} className="px-3 py-1.5 bg-purple-500/20 rounded-full">
-                <Text className="text-purple-400 text-sm">{item}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-      )}
-
-      {/* Safety tips */}
-      {info.safety_tips && info.safety_tips.length > 0 && (
-        <View
-          className="bg-zinc-900 rounded-xl p-4"
-          style={{ borderWidth: 1, borderColor: '#27272a' }}
-        >
-          <View className="flex-row items-center gap-2 mb-3">
-            <Shield size={18} color="#22c55e" />
-            <Text className="text-white font-semibold">Safety Tips</Text>
-          </View>
-          <View className="gap-2">
-            {info.safety_tips.map((tip, idx) => (
-              <View key={idx} className="flex-row items-start gap-2">
-                <Text className="text-green-400">•</Text>
-                <Text className="text-zinc-300 text-sm flex-1">{tip}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-      )}
-
-      {/* Things to avoid */}
-      {info.avoid && info.avoid.length > 0 && (
-        <View
-          className="bg-zinc-900 rounded-xl p-4"
-          style={{ borderWidth: 1, borderColor: '#27272a' }}
-        >
-          <View className="flex-row items-center gap-2 mb-3">
-            <AlertTriangle size={18} color="#ef4444" />
-            <Text className="text-white font-semibold">Things to Avoid</Text>
-          </View>
-          <View className="gap-2">
-            {info.avoid.map((item, idx) => (
-              <View key={idx} className="flex-row items-start gap-2">
-                <Text className="text-red-400">✗</Text>
-                <Text className="text-zinc-300 text-sm flex-1">{item}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-      )}
-    </View>
-  );
-}

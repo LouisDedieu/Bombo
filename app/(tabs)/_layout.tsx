@@ -1,119 +1,127 @@
+import { useState, useEffect, useMemo } from 'react';
 import { Tabs } from 'expo-router';
-import { View, Text, Platform, DynamicColorIOS } from 'react-native';
-import { Inbox, Bookmark, User } from 'lucide-react-native';
-import Constants from 'expo-constants';
+import { View, Keyboard, Platform } from 'react-native';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+  Easing,
+} from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
+import { TabBar } from '@/components/navigation/TabBar';
+import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import type { NavbarTab, NavbarAction } from '@/components/navigation/Navbar';
+import { useAnalysis } from '@/context/AnalysisContext';
+import { useNotifications } from '@/context/NotificationContext';
 
-const COLOR_ACTIVE   = '#3b82f6';
-const COLOR_INACTIVE = '#71717a';
+function CustomTabBar({ state, navigation }: BottomTabBarProps) {
+  const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
+  const [expanded, setExpanded] = useState(false);
+  const [inputValue, setInputValue] = useState('');
+  const keyboardHeight = useSharedValue(0);
+  const { triggerAnalysis } = useAnalysis();
+  const { unreadCount } = useNotifications();
 
-const isExpoGo = Constants.appOwnership === 'expo';
-const isIOS26 = Platform.OS === 'ios' && parseInt(String(Platform.Version), 10) >= 26 && !isExpoGo;
+  // Build tabs with notification badge
+  const tabs: NavbarTab[] = useMemo(() => [
+    { icon: 'inbox-line', label: t('tabs.inbox'), badge: unreadCount > 0 ? unreadCount : undefined },
+    { icon: 'bookmark-line', label: t('tabs.saved') },
+    { icon: 'user3-line', label: t('tabs.profile') },
+  ], [unreadCount, t]);
 
-// Dynamically import NativeTabs only when supported
-let NativeTabs: any = null;
-let Icon: any = null;
-let Label: any = null;
-if (isIOS26) {
-  const nativeTabsModule = require('expo-router/unstable-native-tabs');
-  NativeTabs = nativeTabsModule.NativeTabs;
-  Icon = nativeTabsModule.Icon;
-  Label = nativeTabsModule.Label;
-}
+  // Build actions with translations
+  const actions: NavbarAction[] = useMemo(() => [
+    { icon: 'sparkling-fill', label: t('tabs.actionsAuto'), color: 'default' as const },
+    { icon: 'signpost-fill', label: t('tabs.actionsTrip'), color: 'green' as const },
+    { icon: 'building-fill', label: t('tabs.actionsCity'), color: 'blue' as const },
+  ], [t]);
 
-function TabIcon({
-                   Icon,
-                   label,
-                   focused,
-                 }: {
-  Icon: React.ComponentType<{ size?: number; color: string }>;
-  label: string;
-  focused: boolean;
-}) {
-  const color = focused ? COLOR_ACTIVE : COLOR_INACTIVE;
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showListener = Keyboard.addListener(showEvent, (e) => {
+      keyboardHeight.value = withTiming(e.endCoordinates.height - insets.bottom, {
+        duration: Platform.OS === 'ios' ? 250 : 200,
+        easing: Easing.out(Easing.ease),
+      });
+    });
+
+    const hideListener = Keyboard.addListener(hideEvent, () => {
+      keyboardHeight.value = withTiming(0, {
+        duration: Platform.OS === 'ios' ? 250 : 200,
+        easing: Easing.out(Easing.ease),
+      });
+    });
+
+    return () => {
+      showListener.remove();
+      hideListener.remove();
+    };
+  }, [insets.bottom]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: -keyboardHeight.value }],
+  }));
+
+  const handleTabChange = (index: number) => {
+    const route = state.routes[index];
+    navigation.navigate(route.name);
+  };
+
+  const handleSubmit = (url: string, _action: NavbarAction) => {
+    // Clear the input after submission
+    setInputValue('');
+    // Delegate to whatever page has registered its handler
+    triggerAnalysis(url);
+  };
+
   return (
-    <View style={{ alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8 }}>
-      <Icon size={24} color={color} />
-      <Text style={{ fontSize: 12, color, marginTop: 4 }}>{label}</Text>
-    </View>
-  );
-}
-
-function ClassicTabs() {
-  return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarStyle: {
-          backgroundColor: '#18181b',
-          borderTopWidth: 1,
-          borderTopColor: '#27272a',
-          height: 64,
-          paddingBottom: 8,
-          paddingTop: 8,
+    <Animated.View
+      style={[
+        {
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          paddingHorizontal: 16,
+          paddingBottom: insets.bottom + 8,
         },
-        tabBarShowLabel: false,
-      }}
+        animatedStyle,
+      ]}
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          tabBarIcon: ({ focused }) => <TabIcon Icon={Inbox} label="Inbox" focused={focused} />,
-        }}
+      <TabBar
+        tabs={tabs}
+        activeIndex={state.index}
+        onTabChange={handleTabChange}
+        expanded={expanded}
+        onExpandedChange={setExpanded}
+        actions={actions}
+        inputPlaceholder={t('tabs.pasteLinkPlaceholder')}
+        inputValue={inputValue}
+        onInputChange={setInputValue}
+        onSubmit={handleSubmit}
       />
-      <Tabs.Screen
-        name="trips"
-        options={{
-          tabBarIcon: ({ focused }) => <TabIcon Icon={Bookmark} label="Saved" focused={focused} />,
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          tabBarIcon: ({ focused }) => <TabIcon Icon={User} label="Profile" focused={focused} />,
-        }}
-      />
-      <Tabs.Screen
-        name="review"
-        options={{
-          href: null,
-        }}
-      />
-    </Tabs>
-  );
-}
-
-function LiquidGlassTabs() {
-  if (!NativeTabs) return <ClassicTabs />;
-
-  const dynamicColor = DynamicColorIOS({
-    dark: 'white',
-    light: 'black',
-  });
-
-  return (
-    <NativeTabs
-      labelStyle={{ color: dynamicColor }}
-      tintColor={dynamicColor}
-    >
-      <NativeTabs.Trigger name="index">
-        <Icon sf={{ default: 'tray', selected: 'tray.fill' }} md="inbox" />
-        <Label>Inbox</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="trips">
-        <Icon sf={{ default: 'bookmark', selected: 'bookmark.fill' }} md="bookmark" />
-        <Label>Saved</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="profile">
-        <Icon sf={{ default: 'person', selected: 'person.fill' }} md="person" />
-        <Label>Profile</Label>
-      </NativeTabs.Trigger>
-    </NativeTabs>
+    </Animated.View>
   );
 }
 
 export default function TabsLayout() {
-  if (isIOS26) {
-    return <LiquidGlassTabs />;
-  }
-  return <ClassicTabs />;
+  return (
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        tabBarStyle: { display: 'none' },
+        sceneStyle: { backgroundColor: 'transparent' },
+      }}
+      tabBar={(props) => <CustomTabBar {...props} />}
+    >
+      <Tabs.Screen name="index" />
+      <Tabs.Screen name="trips" />
+      <Tabs.Screen name="profile" />
+      <Tabs.Screen name="review" options={{ href: null }} />
+    </Tabs>
+  );
 }

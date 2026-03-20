@@ -12,334 +12,81 @@ import {
   TouchableOpacity,
   FlatList,
   RefreshControl,
-  Image,
+  ImageBackground,
   Animated,
   Easing,
   Alert,
-  Platform,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
+import { Navbar } from '@/components/navigation/Navbar';
+import Loader from '@/components/Loader';
+import { ContentCard } from '@/components/ContentCard';
+import { colors } from '@/constants/colors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Constants from 'expo-constants';
-
-// Check if using native tabs (iOS 26+) which handles safe area automatically
-const isExpoGo = Constants.appOwnership === 'expo';
-const useNativeTabs = Platform.OS === 'ios' && parseInt(String(Platform.Version), 10) >= 26 && !isExpoGo;
-import { useRouter, useFocusEffect } from 'expo-router';
-import {
-  Map,
-  MapPin,
-  Calendar,
-  Loader2,
-  Bookmark,
-  Trash2,
-  Building2,
-  Star,
-} from 'lucide-react-native';
+import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { deleteTrip } from '@/services/tripService';
 import { deleteCity } from '@/services/cityService';
-import {
-  getUserSavedItems,
-  SavedItem,
-  SavedFilter,
-  getEntityAccentColor,
-} from '@/services/savedService';
+import { getUserSavedItems, SavedItem } from '@/services/savedService';
+import Icon from "react-native-remix-icon";
 
-// -- Helpers ------------------------------------------------------------------
+// -- Filter type (without 'all') ----------------------------------------------
 
-function timeAgo(dateString: string): string {
-  const diffDays = Math.floor(
-    (Date.now() - new Date(dateString).getTime()) / 86_400_000
-  );
-  if (diffDays === 0) return "Aujourd'hui";
-  if (diffDays === 1) return 'Hier';
-  if (diffDays < 7) return `Il y a ${diffDays} jours`;
-  if (diffDays < 30) return `Il y a ${Math.floor(diffDays / 7)} semaines`;
-  return `Il y a ${Math.floor(diffDays / 30)} mois`;
-}
-
-// -- SpinningLoader -----------------------------------------------------------
-
-function SpinningLoader({ size = 32, color = '#60a5fa' }: { size?: number; color?: string }) {
-  const rotation = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.loop(
-      Animated.timing(rotation, {
-        toValue: 1,
-        duration: 1000,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      })
-    ).start();
-  }, []);
-
-  const spin = rotation.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
-
-  return (
-    <Animated.View style={{ transform: [{ rotate: spin }] }}>
-      <Loader2 size={size} color={color} />
-    </Animated.View>
-  );
-}
-
-// -- Filter Tabs --------------------------------------------------------------
-
-function FilterTabs({
-  filter,
-  onFilterChange,
-}: {
-  filter: SavedFilter;
-  onFilterChange: (f: SavedFilter) => void;
-}) {
-  const filters: { key: SavedFilter; label: string }[] = [
-    { key: 'all', label: 'All' },
-    { key: 'trip', label: 'Trips' },
-    { key: 'city', label: 'Cities' },
-  ];
-
-  return (
-    <View
-      className="flex-row border-b border-zinc-800"
-      style={{ paddingHorizontal: 16 }}
-    >
-      {filters.map(({ key, label }) => (
-        <TouchableOpacity
-          key={key}
-          onPress={() => onFilterChange(key)}
-          className="flex-1 py-3"
-          style={{
-            borderBottomWidth: filter === key ? 2 : 0,
-            borderBottomColor: filter === key ? '#3b82f6' : 'transparent',
-          }}
-        >
-          <Text
-            className={`text-center text-sm font-medium ${
-              filter === key ? 'text-blue-400' : 'text-zinc-500'
-            }`}
-          >
-            {label}
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-  );
-}
-
-// -- EntityCard ---------------------------------------------------------------
-
-function EntityCard({
-  item,
-  animIndex,
-  onPress,
-  onDelete,
-}: {
-  item: SavedItem;
-  animIndex: number;
-  onPress: () => void;
-  onDelete: () => void;
-}) {
-  const isCity = item.entity_type === 'city';
-  const accentColor = getEntityAccentColor(item.entity_type);
-
-  const handleDelete = () => {
-    Alert.alert(
-      'Supprimer definitivement ?',
-      `Ce ${isCity ? 'guide' : 'voyage'} sera supprime de facon permanente.`,
-      [
-        { text: 'Annuler', style: 'cancel' },
-        { text: 'Supprimer', style: 'destructive', onPress: onDelete },
-      ]
-    );
-  };
-
-  // Staggered entry animation
-  const opacity = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(20)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(opacity, {
-        toValue: 1,
-        duration: 300,
-        delay: animIndex * 80,
-        easing: Easing.out(Easing.ease),
-        useNativeDriver: true,
-      }),
-      Animated.timing(translateY, {
-        toValue: 0,
-        duration: 300,
-        delay: animIndex * 80,
-        easing: Easing.out(Easing.ease),
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, []);
-
-  return (
-    <Animated.View style={{ opacity, transform: [{ translateY }] }}>
-      <TouchableOpacity
-        onPress={onPress}
-        activeOpacity={0.8}
-        className="bg-zinc-900 rounded-xl overflow-hidden"
-        style={{
-          borderWidth: 1,
-          borderColor: '#27272a',
-          borderLeftWidth: 4,
-          borderLeftColor: accentColor,
-        }}
-      >
-        {/* Thumbnail */}
-        {item.thumbnail_url ? (
-          <View className="relative h-48 bg-zinc-800 overflow-hidden">
-            <Image
-              source={{ uri: item.thumbnail_url }}
-              className="w-full h-full"
-              resizeMode="cover"
-            />
-            <View
-              className="absolute inset-0"
-              style={{ backgroundColor: 'rgba(0,0,0,0.70)' }}
-            />
-            <View className="absolute bottom-4 left-4 right-4">
-              {/* Entity type badge */}
-              <View
-                className="self-start px-2 py-0.5 rounded-full mb-2"
-                style={{ backgroundColor: `${accentColor}33` }}
-              >
-                <Text style={{ color: accentColor, fontSize: 10, fontWeight: '600' }}>
-                  {isCity ? 'City Guide' : 'Trip'}
-                </Text>
-              </View>
-              <Text
-                className="text-xl font-bold text-white leading-tight"
-                numberOfLines={2}
-              >
-                {item.title}
-              </Text>
-              {item.subtitle && (
-                <Text className="text-xs text-zinc-300 mt-1">{item.subtitle}</Text>
-              )}
-            </View>
-          </View>
-        ) : (
-          <View className="p-4 pb-0">
-            {/* Entity type badge */}
-            <View
-              className="self-start px-2 py-0.5 rounded-full mb-2"
-              style={{ backgroundColor: `${accentColor}33` }}
-            >
-              <Text style={{ color: accentColor, fontSize: 10, fontWeight: '600' }}>
-                {isCity ? 'City Guide' : 'Trip'}
-              </Text>
-            </View>
-            <Text className="text-xl font-bold text-white">{item.title}</Text>
-            {item.subtitle && (
-              <Text className="text-xs text-zinc-400 mt-1">{item.subtitle}</Text>
-            )}
-          </View>
-        )}
-
-        {/* Info section */}
-        <View className="p-4 gap-3">
-          <View className="flex-row items-center gap-4 flex-wrap">
-            {/* Duration or highlights count */}
-            {isCity && item.highlights_count ? (
-              <View className="flex-row items-center gap-1.5">
-                <Star size={16} color={accentColor} />
-                <Text className="text-sm text-zinc-400">
-                  {item.highlights_count} highlights
-                </Text>
-              </View>
-            ) : item.duration_days ? (
-              <View className="flex-row items-center gap-1.5">
-                <MapPin size={16} color={accentColor} />
-                <Text className="text-sm text-zinc-400">{item.duration_days} jours</Text>
-              </View>
-            ) : null}
-
-            {/* Date */}
-            <View className="flex-row items-center gap-1.5">
-              <Calendar size={16} color="#71717a" />
-              <Text className="text-sm text-zinc-400">{timeAgo(item.created_at)}</Text>
-            </View>
-
-            {/* Creator */}
-            {item.content_creator_handle && (
-              <Text className="text-sm text-zinc-500">
-                @{item.content_creator_handle}
-              </Text>
-            )}
-          </View>
-
-          {/* User notes */}
-          {item.notes && (
-            <Text
-              className="text-xs text-zinc-500 italic pt-2"
-              style={{ borderTopWidth: 1, borderTopColor: '#27272a' }}
-            >
-              {item.notes}
-            </Text>
-          )}
-
-          {/* Footer */}
-          <View className="flex-row items-center justify-between pt-1">
-            <View className="flex-row items-center gap-1.5">
-              <Bookmark size={14} color="#4ade80" fill="#4ade80" />
-              <Text className="text-xs text-green-400">Sauvegarde</Text>
-            </View>
-            <TouchableOpacity
-              onPress={handleDelete}
-              className="p-2 -mr-2"
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Trash2 size={18} color="#71717a" />
-            </TouchableOpacity>
-          </View>
-        </View>
-      </TouchableOpacity>
-    </Animated.View>
-  );
-}
+type FilterType = 'trip' | 'city';
 
 // -- Main Component -----------------------------------------------------------
 
 export default function SavedPage() {
   const router = useRouter();
+  const { t } = useTranslation();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
 
-  const [filter, setFilter] = useState<SavedFilter>('all');
-  const [items, setItems] = useState<SavedItem[]>([]);
+  const [filter, setFilter] = useState<FilterType>('trip');
+  const [activeTabIndex, setActiveTabIndex] = useState(0);
+
+  // Cache items per filter
+  const [tripItems, setTripItems] = useState<SavedItem[]>([]);
+  const [cityItems, setCityItems] = useState<SavedItem[]>([]);
+  const [tripLoaded, setTripLoaded] = useState(false);
+  const [cityLoaded, setCityLoaded] = useState(false);
+
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [filterLoading, setFilterLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Get current items based on filter
+  const items = filter === 'trip' ? tripItems : cityItems;
+
   const loadItems = useCallback(
-    async (pageNum: number, append = false) => {
+    async (pageNum: number, append = false, forceFilter?: FilterType) => {
+      const targetFilter = forceFilter ?? filter;
+      const targetSetItems = targetFilter === 'trip' ? setTripItems : setCityItems;
+      const targetSetLoaded = targetFilter === 'trip' ? setTripLoaded : setCityLoaded;
+
       if (!user) {
-        setLoading(false);
+        setInitialLoading(false);
         return;
       }
       try {
-        const response = await getUserSavedItems(user.id, filter, pageNum, 20);
+        const response = await getUserSavedItems(user.id, targetFilter, pageNum, 20);
         if (append) {
-          setItems((prev) => [...prev, ...response.items]);
+          targetSetItems((prev) => [...prev, ...response.items]);
         } else {
-          setItems(response.items);
+          targetSetItems(response.items);
         }
         setHasMore(response.has_more);
+        targetSetLoaded(true);
         setError(null);
       } catch (err: any) {
         setError(err.message);
       } finally {
-        setLoading(false);
+        setInitialLoading(false);
+        setFilterLoading(false);
         setRefreshing(false);
         setLoadingMore(false);
       }
@@ -347,58 +94,80 @@ export default function SavedPage() {
     [user, filter]
   );
 
-  // Initial load
+  // Initial load (trip)
   useEffect(() => {
-    setLoading(true);
-    setPage(1);
-    loadItems(1, false);
-  }, [filter, user]);
+    if (user && !tripLoaded) {
+      setPage(1);
+      loadItems(1, false, 'trip');
+    } else if (!user) {
+      setInitialLoading(false);
+    }
+  }, [user]);
 
-  // Reload on focus
-  useFocusEffect(
-    useCallback(() => {
-      loadItems(1, false);
-    }, [loadItems])
-  );
 
-  // Handle filter change
-  const handleFilterChange = (newFilter: SavedFilter) => {
+  // Handle tab change
+  const handleTabChange = (index: number) => {
+    setActiveTabIndex(index);
+    const newFilter: FilterType = index === 0 ? 'trip' : 'city';
     if (newFilter !== filter) {
       setFilter(newFilter);
       setPage(1);
-      setItems([]);
       setHasMore(true);
+
+      // Only load if not already loaded
+      const alreadyLoaded = newFilter === 'trip' ? tripLoaded : cityLoaded;
+      if (!alreadyLoaded) {
+        setFilterLoading(true);
+        loadItems(1, false, newFilter);
+      }
     }
   };
 
   // Load more (infinite scroll)
   const handleLoadMore = () => {
-    if (!hasMore || loadingMore || loading) return;
+    // Don't trigger if list is too short (less than a full page)
+    if (items.length < 20) return;
+    if (!hasMore || loadingMore || filterLoading) return;
     setLoadingMore(true);
     const nextPage = page + 1;
     setPage(nextPage);
-    loadItems(nextPage, true);
+    loadItems(nextPage, true, filter);
   };
 
-  // Refresh
+  // Refresh (pull-to-refresh)
   const handleRefresh = () => {
     setRefreshing(true);
     setPage(1);
-    loadItems(1, false);
+    loadItems(1, false, filter);
   };
 
   // Delete handler
   const handleDelete = async (item: SavedItem) => {
-    try {
-      if (item.entity_type === 'city') {
-        await deleteCity(item.entity_id);
-      } else {
-        await deleteTrip(item.entity_id);
-      }
-      setItems((prev) => prev.filter((i) => i.id !== item.id));
-    } catch (err) {
-      Alert.alert('Erreur', 'Impossible de supprimer.');
-    }
+    const alertTitle = item.entity_type === 'city' ? t('trips.deleteCity') : t('trips.deleteTrip');
+    Alert.alert(
+      alertTitle,
+      `Toutes les données associées à "${item.title}" seront supprimées définitivement.`,
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('common.delete'),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              if (item.entity_type === 'city') {
+                await deleteCity(item.entity_id);
+                setCityItems((prev) => prev.filter((i) => i.id !== item.id));
+              } else {
+                await deleteTrip(item.entity_id);
+                setTripItems((prev) => prev.filter((i) => i.id !== item.id));
+              }
+            } catch (err) {
+              Alert.alert(t('trips.error'), t('trips.cannotDelete'));
+            }
+          },
+        },
+      ]
+    );
   };
 
   // Navigation handler
@@ -410,47 +179,98 @@ export default function SavedPage() {
     }
   };
 
-  // Loading state
-  if (loading && items.length === 0) {
+  // Initial loading state (only on first load)
+  if (initialLoading) {
     return (
-      <View
-        className="flex-1 bg-black items-center justify-center"
-        style={{ paddingTop: insets.top }}
+      <ImageBackground
+        source={require('@/assets/images/bg-gradient.png')}
+        className="flex-1"
+        resizeMode="cover"
       >
-        <SpinningLoader size={32} color="#60a5fa" />
-      </View>
+        <View
+          className="flex-1 justify-center items-center"
+          style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}
+        >
+          <Loader />
+        </View>
+      </ImageBackground>
     );
   }
 
   // Error state
   if (error && items.length === 0) {
     return (
-      <View
-        className="flex-1 bg-black items-center justify-center"
-        style={{ paddingTop: insets.top }}
+      <ImageBackground
+        source={require('@/assets/images/bg-gradient.png')}
+        className="flex-1"
+        resizeMode="cover"
       >
-        <Text className="text-sm text-red-400">Erreur : {error}</Text>
-      </View>
+        <View
+          className="center-content"
+          style={{ paddingTop: insets.top }}
+        >
+          <Text className="text-sm text-error font-dmsans">Erreur : {error}</Text>
+        </View>
+      </ImageBackground>
     );
   }
 
   // Not logged in
   if (!user) {
     return (
-      <View
-        className="flex-1 bg-black items-center justify-center"
-        style={{ paddingTop: insets.top }}
+      <ImageBackground
+        source={require('@/assets/images/bg-gradient.png')}
+        className="flex-1"
+        resizeMode="cover"
       >
-        <Text className="text-zinc-400">Connectez-vous pour voir vos sauvegardes.</Text>
-      </View>
+        <View
+          className="center-content"
+          style={{ paddingTop: insets.top }}
+        >
+          <Text className="text-text-secondary font-dmsans">{t('trips.signInToView')}</Text>
+        </View>
+      </ImageBackground>
     );
   }
 
+  const navbarTabs = [
+    { icon: 'signpost-line', label: 'Trip', badge: tripItems.length },
+    { icon: 'building-line', label: 'City', badge: cityItems.length },
+  ];
+
   return (
-    <View className="flex-1 bg-black">
-      {/* Header with filter tabs */}
-      <View style={{ paddingTop: insets.top }}>
-        <FilterTabs filter={filter} onFilterChange={handleFilterChange} />
+    <ImageBackground
+      source={require('@/assets/images/bg-gradient.png')}
+      className="flex-1"
+      resizeMode="cover"
+    >
+      {/* Header */}
+      <View style={{ paddingTop: insets.top + 16, paddingHorizontal: 16 }}>
+        {/* Title */}
+        <View className="flex-row mb-4">
+          <Text className="section-title">
+            {t('trips.your')}{' '}
+          </Text>
+          <Text
+            className="section-title-accent"
+            style={{
+              textShadowColor: colors.shadowDark,
+              textShadowOffset: { width: 0, height: 4 },
+              textShadowRadius: 4,
+            }}
+          >
+            {`${t('trips.collection')}`}
+          </Text>
+        </View>
+
+        {/* Navbar */}
+        <Navbar
+          tabs={navbarTabs}
+          activeIndex={activeTabIndex}
+          onTabChange={handleTabChange}
+          variant="secondary"
+          size="default"
+        />
       </View>
 
       {/* List */}
@@ -460,42 +280,84 @@ export default function SavedPage() {
         contentContainerStyle={{
           paddingHorizontal: 16,
           paddingTop: 16,
-          paddingBottom: insets.bottom + 16,
+          paddingBottom: insets.bottom + 120,
           gap: 16,
         }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor="#60a5fa"
+            tintColor={colors.textPrimary}
           />
         }
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.5}
-        renderItem={({ item, index }) => (
-          <EntityCard
-            item={item}
-            animIndex={index}
-            onPress={() => handlePress(item)}
-            onDelete={() => handleDelete(item)}
-          />
-        )}
-        ListEmptyComponent={<EmptyState filter={filter} />}
+        renderItem={({ item }) => {
+          // Parse city subtitle "Nice, France" → country = "France"
+          const countryFromSubtitle = item.subtitle?.split(', ').slice(1).join(', ') || undefined;
+
+          // Transform days data for ContentCard
+          const daysForCard = item.days?.map((d) => ({
+            dayNumber: d.day_number,
+            count: d.spots_count,
+          }));
+
+          // Transform categories data for ContentCard
+          const categoriesForCard = item.categories?.map((c) => ({
+            category: c.category,
+            count: c.count,
+          }));
+
+          return (
+            <TouchableOpacity
+              onPress={() => handlePress(item)}
+              onLongPress={() => handleDelete(item)}
+              activeOpacity={0.8}
+            >
+              {item.entity_type === 'trip' ? (
+                <ContentCard
+                  variant="trip"
+                  title={item.title}
+                  daysCount={item.duration_days ?? undefined}
+                  days={daysForCard}
+                />
+              ) : (
+                <ContentCard
+                  variant="city"
+                  title={item.title}
+                  highlightsCount={item.highlights_count ?? undefined}
+                  country={countryFromSubtitle}
+                  categories={categoriesForCard}
+                />
+              )}
+            </TouchableOpacity>
+          );
+        }}
+        ListEmptyComponent={
+          filterLoading ? (
+            <View className="items-center py-16">
+              <Loader size={72} />
+            </View>
+          ) : (
+            <EmptyState filter={filter} />
+          )
+        }
         ListFooterComponent={
           loadingMore ? (
             <View className="py-4 items-center">
-              <SpinningLoader size={24} color="#60a5fa" />
+              <Loader size={48} />
             </View>
           ) : null
         }
       />
-    </View>
+    </ImageBackground>
   );
 }
 
 // -- Empty State --------------------------------------------------------------
 
-function EmptyState({ filter }: { filter: SavedFilter }) {
+function EmptyState({ filter }: { filter: FilterType }) {
+  const { t } = useTranslation();
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(20)).current;
 
@@ -517,30 +379,22 @@ function EmptyState({ filter }: { filter: SavedFilter }) {
   }, []);
 
   const isCity = filter === 'city';
-  const Icon = isCity ? Building2 : Map;
-  const title =
-    filter === 'all'
-      ? 'Aucune sauvegarde'
-      : filter === 'city'
-      ? 'Aucun guide de ville'
-      : 'Aucun voyage';
-  const subtitle =
-    filter === 'all'
-      ? "Validez des videos depuis l'Inbox pour creer vos premiers itineraires."
-      : filter === 'city'
-      ? "Analysez des videos de type 'city guide' pour decouvrir des villes."
-      : "Analysez des videos de voyage pour creer des itineraires.";
+  const icon = isCity ? 'building-line' : 'signpost-line';
+  const title = isCity ? t('trips.noCities') : t('trips.noTrips');
+  const subtitle = isCity
+    ? t('trips.analyzeCityVideos')
+    : t('trips.analyzeVideosToCreate');
 
   return (
     <Animated.View
       style={{ opacity, transform: [{ translateY }] }}
       className="items-center py-16"
     >
-      <View className="w-20 h-20 bg-zinc-800 rounded-full items-center justify-center mb-4">
-        <Icon size={40} color="#52525b" />
+      <View className="w-20 h-20 bg-bg-primary/50 rounded-full items-center justify-center mb-4">
+        <Icon name={icon} size={40} color={colors.textMuted} />
       </View>
-      <Text className="text-xl font-medium text-white mb-2">{title}</Text>
-      <Text className="text-zinc-400 text-center" style={{ maxWidth: 280 }}>
+      <Text className="text-xl font-dmsans-medium text-text-primary mb-2">{title}</Text>
+      <Text className="text-text-secondary font-dmsans text-center" style={{ maxWidth: 280 }}>
         {subtitle}
       </Text>
     </Animated.View>

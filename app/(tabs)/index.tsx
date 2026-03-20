@@ -2,180 +2,200 @@
  * pages/Inbox.tsx
  *
  * Affiche :
+ *  - Empty state (cas actuel implémenté)
  *  - Les jobs en cours d'analyse (pending / downloading / analyzing)
  *  - Les voyages terminés mais pas encore validés (done, absent de user_saved_trips)
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
+  ImageBackground,
+  ScrollView,
   TouchableOpacity,
-  Pressable,
+  Alert,
   FlatList,
   RefreshControl,
   Animated,
   Easing,
-  Alert,
 } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
+import * as Notifications from 'expo-notifications';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import {
-  Share2,
-  Sparkles,
-  CheckCircle2,
-  AlertCircle,
-  Clock,
-  Download,
-  Cpu,
-  ExternalLink,
-  Plus,
-  Loader2,
-  Map,
-  MapPin,
-  Trash2,
-} from 'lucide-react-native';
-import { apiFetch, apiDelete } from '@/lib/api';
+import Icon from 'react-native-remix-icon';
+import { useTranslation } from 'react-i18next';
+
+import { PrimaryButton } from '@/components/PrimaryButton';
+import { Input } from '@/components/Input';
+import { SharePromotionCard } from '@/components/SharePromotionCard';
+import { JobCard } from '@/components/JobCard';
+import Loader from '@/components/Loader';
 import { useAuth } from '@/context/AuthContext';
-import {Button} from '@/components/Button';
-import AddTripModal from '@/components/AddTripModal';
+import { useAnalysis } from '@/context/AnalysisContext';
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+import {
+  type InboxJob,
+  fetchInboxJobs,
+  deleteInboxJob,
+  startAnalysis,
+  createOptimisticJob,
+  mergeWithOptimisticJobs,
+  mapJobToCardProps,
+  isValidUrl,
+  isJobInProgress,
+} from '@/services/inboxService';
+import { markNotificationsReadByEntity } from '@/services/notificationService';
 
-type JobStatus = 'pending' | 'downloading' | 'analyzing' | 'done' | 'error';
-type EntityType = 'trip' | 'city';
+import { colors } from '@/constants/colors';
 
-interface InboxJob {
-  jobId: string;
-  tripId: string | null;
-  cityId: string | null;
-  entityType: EntityType;
-  title: string;
-  sourceUrl: string;
-  platform: 'tiktok' | 'instagram' | 'unknown';
-  createdAt: string;
-  status: JobStatus;
-  progressPct: number;
-  errorMessage: string | null;
-  isLocal: boolean;
-  highlightsCount?: number;
+// ── Empty State Component ─────────────────────────────────────────────────────
+
+interface EmptyStateProps {
+  onAnalysisStarted: (url: string) => void;
+  isSubmitting: boolean;
 }
 
-type RootStackParamList = {
-  InboxTab: undefined;
-  Review: { tripId: string };
-};
+function EmptyState({ onAnalysisStarted, isSubmitting }: EmptyStateProps) {
+  const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
+  const [videoUrl, setVideoUrl] = useState('');
 
-// ── Status config — hex équivalents des classes web par statut ────────────────
-// web: pending   → bg-zinc-700/50  text-zinc-400  border-zinc-600
-//      downloading→ bg-blue-500/20  text-blue-300  border-blue-500/30
-//      analyzing  → bg-purple-500/20 text-purple-300 border-purple-500/30
-//      done       → bg-green-500/20  text-green-300  border-green-500/30
-//      error      → bg-red-500/20    text-red-300    border-red-500/30
-const STATUS_CONFIG: Record<JobStatus, {
-  label: string;
-  iconColor: string;
-  textColor: string;
-  badgeBg: string;
-  badgeBorder: string;
-  icon: React.ComponentType<{ size?: number; color: string }>;
-}> = {
-  pending: {
-    label: 'En attente',
-    iconColor: '#a1a1aa',   // zinc-400
-    textColor: '#a1a1aa',
-    badgeBg: '#3f3f461A',   // zinc-700 / 10 %
-    badgeBorder: '#52525b', // zinc-600
-    icon: Clock,
-  },
-  downloading: {
-    label: 'Téléchargement',
-    iconColor: '#93c5fd',   // blue-300
-    textColor: '#93c5fd',
-    badgeBg: '#3b82f633',   // blue-500 / 20 %
-    badgeBorder: '#3b82f64D', // blue-500 / 30 %
-    icon: Download,
-  },
-  analyzing: {
-    label: 'Analyse IA',
-    iconColor: '#d8b4fe',   // purple-300
-    textColor: '#d8b4fe',
-    badgeBg: '#a855f733',   // purple-500 / 20 %
-    badgeBorder: '#a855f74D', // purple-500 / 30 %
-    icon: Cpu,
-  },
-  done: {
-    label: 'Terminé',
-    iconColor: '#86efac',   // green-300
-    textColor: '#86efac',
-    badgeBg: '#22c55e33',   // green-500 / 20 %
-    badgeBorder: '#22c55e4D', // green-500 / 30 %
-    icon: CheckCircle2,
-  },
-  error: {
-    label: 'Erreur',
-    iconColor: '#fca5a5',   // red-300
-    textColor: '#fca5a5',
-    badgeBg: '#ef444433',   // red-500 / 20 %
-    badgeBorder: '#ef44444D', // red-500 / 30 %
-    icon: AlertCircle,
-  },
-};
+  const handleAnalyze = () => {
+    if (!videoUrl.trim()) return;
+    onAnalysisStarted(videoUrl.trim());
+    setVideoUrl('');
+  };
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function detectPlatform(url: string): InboxJob['platform'] {
-  if (/tiktok\.com/i.test(url)) return 'tiktok';
-  if (/instagram\.com/i.test(url)) return 'instagram';
-  return 'unknown';
-}
-
-// ── SpinningLoader — équivalent de <Loader2 className="animate-spin" /> ───────
-
-function SpinningLoader({ size = 32, color = '#60a5fa' }: { size?: number; color?: string }) {
-  const rotation = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.loop(
-      Animated.timing(rotation, {
-        toValue: 1,
-        duration: 1000,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      })
-    ).start();
-  }, []);
-
-  const spin = rotation.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+  const isValidInput = isValidUrl(videoUrl);
 
   return (
-    <Animated.View style={{ transform: [{ rotate: spin }] }}>
-      <Loader2 size={size} color={color} />
-    </Animated.View>
+    <ImageBackground
+      source={require('@/assets/images/bg-gradient.png')}
+      className="flex-1"
+      resizeMode="cover"
+    >
+      <ScrollView
+        contentContainerStyle={{
+          flexGrow: 1,
+          paddingTop: insets.top + 40,
+          paddingHorizontal: 24,
+          paddingBottom: insets.bottom + 120,
+        }}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+      >
+        {/* Title */}
+        <View className="mb-4">
+          <Text className="font-righteous text-hero text-text-primary">
+            {t('inbox.transformVideo')}
+          </Text>
+          <View className="flex-row">
+            <Text
+              className="font-righteous text-hero text-accent"
+              style={{
+                textShadowColor: colors.shadowDark,
+                textShadowOffset: { width: 0, height: 4 },
+                textShadowRadius: 4,
+              }}
+            >
+              {`${t('inbox.video')}`}
+            </Text>
+            <Text className="font-righteous text-hero text-text-primary">
+              {` ${t('inbox.intoItinerary')}`}
+            </Text>
+          </View>
+        </View>
+
+        {/* Subtitle */}
+        <Text className="font-dmsans-medium text-body text-text-secondary mb-10">
+          {t('inbox.linkSubtitle')}
+        </Text>
+
+        {/* Input */}
+        <Input
+          leftIcon="link"
+          placeholder={t('inbox.pasteLinkHere')}
+          variant="dark"
+          value={videoUrl}
+          onChangeText={setVideoUrl}
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="url"
+          editable={!isSubmitting}
+          style={{ marginBottom: 16 }}
+        />
+
+        {/* Primary Button */}
+        <PrimaryButton
+          title={t('inbox.analyzeVideo')}
+          showArrow
+          fullWidth
+          onPress={handleAnalyze}
+          disabled={!isValidInput}
+          loading={isSubmitting}
+          style={{ marginBottom: 60 }}
+        />
+
+        {/* Share Promotion Card */}
+        <SharePromotionCard style={{ marginBottom: 15 }} />
+
+        {/* Social Links */}
+        <View className="flex-row items-center justify-center gap-6">
+          <TouchableOpacity className="row-center" activeOpacity={0.7}>
+            <Icon name="tiktok-fill" color={colors.social} size={17} />
+            <Text className="font-dmsans-medium text-micro text-social">{t('inbox.tiktok')}</Text>
+          </TouchableOpacity>
+
+          <View className="w-px h-4.5 bg-divider" />
+
+          <TouchableOpacity className="row-center" activeOpacity={0.7}>
+            <Icon name="instagram-line" color={colors.social} size={17} />
+            <Text className="font-dmsans-medium text-micro text-social">{t('inbox.instagramReels')}</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </ImageBackground>
   );
 }
 
-// ── JobCard ───────────────────────────────────────────────────────────────────
+// ── Loading State Component ───────────────────────────────────────────────────
 
-function JobCard({
-                   job,
-                   onPress,
-                   onDelete,
-                   animIndex,
-                 }: {
+function LoadingState() {
+  const insets = useSafeAreaInsets();
+
+  return (
+    <ImageBackground
+      source={require('@/assets/images/bg-gradient.png')}
+      className="flex-1"
+      resizeMode="cover"
+    >
+      <View
+        className="flex-1 justify-center items-center"
+        style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}
+      >
+        <Loader />
+      </View>
+    </ImageBackground>
+  );
+}
+
+// ── Inbox Job Card Wrapper ────────────────────────────────────────────────────
+
+interface InboxJobCardProps {
   job: InboxJob;
   onPress: () => void;
   onDelete: () => void;
   animIndex: number;
-}) {
-  const cfg = STATUS_CONFIG[job.status];
-  const Icon = cfg.icon;
-  const isClickable = job.status === 'done' && (!!job.tripId || !!job.cityId);
-  const isInProgress = ['pending', 'downloading', 'analyzing'].includes(job.status);
-  const isCity = job.entityType === 'city';
+}
 
-  // Entrée staggerée — web: motion initial { opacity:0, x:-20 } → { opacity:1, x:0 }, delay index*0.04
-  const opacity    = useRef(new Animated.Value(0)).current;
+function InboxJobCard({ job, onPress, onDelete, animIndex }: InboxJobCardProps) {
+  const isNavigable = job.status === 'done' && (job.tripId || job.cityId);
+  const isDeletable = (job.status === 'done' || job.status === 'error') && (job.tripId || job.cityId);
+  const isInteractive = isNavigable || isDeletable;
+  const cardProps = mapJobToCardProps(job);
+
+  const opacity = useRef(new Animated.Value(0)).current;
   const translateX = useRef(new Animated.Value(-20)).current;
 
   useEffect(() => {
@@ -197,262 +217,344 @@ function JobCard({
     ]).start();
   }, []);
 
-  // Barre de progression animée — web: motion.div width 0%→progressPct% transition duration:0.5
-  const progressAnim = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.timing(progressAnim, {
-      toValue: job.progressPct,
-      duration: 500,
-      useNativeDriver: false, // width ne supporte pas useNativeDriver
-    }).start();
-  }, [job.progressPct]);
+  const handlePress = () => {
+    if (isNavigable) {
+      onPress();
+    }
+  };
 
-  const relativeTime = (() => {
-    const diff = Date.now() - new Date(job.createdAt).getTime();
-    const mins = Math.floor(diff / 60_000);
-    if (mins < 1)  return "À l'instant";
-    if (mins < 60) return `Il y a ${mins} min`;
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24)  return `Il y a ${hrs}h`;
-    return `Il y a ${Math.floor(hrs / 24)}j`;
-  })();
-
-  const platformEmoji =
-    job.platform === 'tiktok' ? '🎵' : job.platform === 'instagram' ? '📸' : '🎬';
+  const handleLongPress = () => {
+    if (isDeletable) {
+      onDelete();
+    }
+  };
 
   return (
     <Animated.View style={{ opacity, transform: [{ translateX }] }}>
       <TouchableOpacity
-        onPress={onPress}
-        disabled={!isClickable}
-        activeOpacity={isClickable ? 0.7 : 1}
-        className="bg-zinc-900 rounded-xl p-4"
-        style={{
-          borderWidth: 1,
-          // web: isClickable → hover:border-zinc-600, sinon border-zinc-800
-          borderColor: isClickable ? '#52525b' : '#27272a',
-        }}
+        onPress={handlePress}
+        onLongPress={handleLongPress}
+        disabled={!isInteractive}
+        activeOpacity={isNavigable ? 0.8 : 1}
       >
-        <View className="flex-row items-start gap-3">
-          {/* Icône plateforme */}
-          <View className="w-10 h-10 rounded-lg bg-zinc-800 items-center justify-center flex-shrink-0">
-            <Text style={{ fontSize: 18 }}>{platformEmoji}</Text>
-          </View>
-
-          <View className="flex-1 min-w-0">
-            {/* Titre + badges */}
-            <View className="flex-row items-start justify-between gap-2">
-              <View className="flex-1 min-w-0">
-                <Text className="text-white font-medium" numberOfLines={1}>
-                  {job.title}
-                </Text>
-                {/* City preview text */}
-                {isCity && job.highlightsCount && job.status === 'done' && (
-                  <Text className="text-xs text-purple-400 mt-0.5">
-                    {job.highlightsCount} points d'interet
-                  </Text>
-                )}
-              </View>
-              {/* Badges row */}
-              <View className="flex-row items-center gap-1.5 flex-shrink-0">
-                {/* Entity type badge */}
-                {job.status === 'done' && (
-                  <View
-                    className="flex-row items-center gap-1 px-2 py-0.5 rounded-full"
-                    style={{
-                      backgroundColor: isCity ? '#a855f733' : '#3b82f633',
-                      borderWidth: 1,
-                      borderColor: isCity ? '#a855f74D' : '#3b82f64D',
-                    }}
-                  >
-                    {isCity ? (
-                      <MapPin size={10} color="#d8b4fe" />
-                    ) : (
-                      <Map size={10} color="#93c5fd" />
-                    )}
-                    <Text style={{ fontSize: 10, fontWeight: '500', color: isCity ? '#d8b4fe' : '#93c5fd' }}>
-                      {isCity ? 'Ville' : 'Voyage'}
-                    </Text>
-                  </View>
-                )}
-                {/* Status badge */}
-                <View
-                  className="flex-row items-center gap-1 px-2 py-0.5 rounded-full"
-                  style={{
-                    backgroundColor: cfg.badgeBg,
-                    borderWidth: 1,
-                    borderColor: cfg.badgeBorder,
-                  }}
-                >
-                  <Icon size={12} color={cfg.iconColor} />
-                  <Text style={{ fontSize: 10, fontWeight: '500', color: cfg.textColor }}>
-                    {cfg.label}
-                  </Text>
-                </View>
-              </View>
-            </View>
-
-            {/* URL source */}
-            <Text className="text-xs text-zinc-500 mt-0.5" numberOfLines={1}>
-              {job.sourceUrl}
-            </Text>
-
-            {/* Progression — web: Loader2 animate-spin + motion.div width animée */}
-            {isInProgress && (
-              <View className="mt-3">
-                <View className="flex-row items-center gap-2 mb-1">
-                  <SpinningLoader size={12} color="#60a5fa" /* blue-400 */ />
-                  <Text className="text-xs text-zinc-400">
-                    {job.progressPct > 0 ? `${job.progressPct}%` : 'Traitement en cours…'}
-                  </Text>
-                </View>
-                {job.progressPct > 0 && (
-                  <View className="h-1 bg-zinc-800 rounded-full overflow-hidden">
-                    {/* web: bg-gradient-to-r from-blue-500 to-purple-600 */}
-                    <Animated.View
-                      style={{
-                        height: '100%',
-                        borderRadius: 9999,
-                        backgroundColor: '#3b82f6', // blue-500 (gradient simplifié)
-                        width: progressAnim.interpolate({
-                          inputRange: [0, 100],
-                          outputRange: ['0%', '100%'],
-                        }),
-                      }}
-                    />
-                  </View>
-                )}
-              </View>
-            )}
-
-            {/* Message d'erreur */}
-            {job.status === 'error' && job.errorMessage && (
-              <Text className="text-xs text-red-400 mt-2">{job.errorMessage}</Text>
-            )}
-
-            {/* Footer : date relative + actions */}
-            <View className="flex-row items-center justify-between mt-2">
-              <View className="flex-row items-center gap-3">
-                <Text className="text-xs text-zinc-600">{relativeTime}</Text>
-                <TouchableOpacity
-                  onPress={onDelete}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  className="flex-row items-center gap-1"
-                >
-                  <Trash2 size={12} color="#ef4444" />
-                  <Text className="text-xs text-red-500">Supprimer</Text>
-                </TouchableOpacity>
-              </View>
-              {isClickable && (
-                <View className="flex-row items-center gap-1">
-                  <Text className="text-xs" style={{ color: isCity ? '#a855f7' : '#60a5fa' }}>
-                    {isCity ? 'Voir la ville' : "Voir l'itineraire"}
-                  </Text>
-                  <ExternalLink size={12} color={isCity ? '#a855f7' : '#60a5fa'} />
-                </View>
-              )}
-            </View>
-          </View>
-        </View>
+        <JobCard
+          status={cardProps.status}
+          title={job.title}
+          subtitle={cardProps.subtitle}
+          url={job.sourceUrl}
+          pillLabel={cardProps.pillLabel}
+          pillBackgroundColor={cardProps.pillBackgroundColor}
+          pillTextColor={cardProps.pillTextColor}
+          cardBackgroundColor={cardProps.cardBackgroundColor}
+          iconLabel={cardProps.iconLabel}
+          iconLabelBackgroundColor={cardProps.iconLabelBackgroundColor}
+        />
       </TouchableOpacity>
     </Animated.View>
   );
 }
 
-// ── Composant principal ───────────────────────────────────────────────────────
+// ── Jobs List Component ───────────────────────────────────────────────────────
+
+interface JobsListProps {
+  jobs: InboxJob[];
+  onAnalysisStarted: (url: string) => void;
+  onDeleteJob: (job: InboxJob) => void;
+  onJobPress: (job: InboxJob) => void;
+  onRefresh: () => void;
+  isSubmitting: boolean;
+  isRefreshing: boolean;
+}
+
+function JobsList({
+                    jobs,
+                    onAnalysisStarted,
+                    onDeleteJob,
+                    onJobPress,
+                    onRefresh,
+                    isSubmitting,
+                    isRefreshing,
+                  }: JobsListProps) {
+  const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
+  const [videoUrl, setVideoUrl] = useState('');
+
+  const handleAnalyze = () => {
+    if (!videoUrl.trim()) return;
+    onAnalysisStarted(videoUrl.trim());
+    setVideoUrl('');
+  };
+
+  const isValidInput = isValidUrl(videoUrl);
+
+  const renderHeader = () => (
+    <View className="mb-4">
+      {/* Main Title */}
+      <View className="flex-row flex-wrap mb-4">
+        <Text className="section-title">
+          {t('inbox.transformVideo')}
+        </Text>
+        <Text
+          className="section-title-accent"
+          style={{
+            textShadowColor: colors.shadowDark,
+            textShadowOffset: { width: 0, height: 4 },
+            textShadowRadius: 4,
+          }}
+        >
+          {` ${t('inbox.video')}`}
+        </Text>
+        <Text className="section-title">
+          {` ${t('inbox.intoItinerary')}`}
+        </Text>
+      </View>
+
+      {/* Input + Button Row */}
+      <View className="flex-row items-center gap-3 mb-5">
+        <Input
+          leftIcon="link"
+          placeholder={t('inbox.newLink')}
+          variant="dark"
+          value={videoUrl}
+          onChangeText={setVideoUrl}
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="url"
+          editable={!isSubmitting}
+          style={{ flex: 1 }}
+        />
+        <PrimaryButton
+          leftIcon="add-line"
+          size="default"
+          onPress={handleAnalyze}
+          disabled={!isValidInput}
+          loading={isSubmitting}
+          style={{ aspectRatio: 1 }}
+        />
+      </View>
+
+      <SharePromotionCard style={{ marginBottom: 32 }} />
+
+      {/* Section Title */}
+      <View className="flex-row gap-2">
+        <Text className="section-title">
+          {t('inbox.allYour')}
+        </Text>
+        <Text
+          className="section-title-accent"
+          style={{
+            textShadowColor: colors.shadowDark,
+            textShadowOffset: { width: 0, height: 4 },
+            textShadowRadius: 4,
+          }}
+        >
+          {`${t('inbox.analyses')}`}
+        </Text>
+      </View>
+    </View>
+  );
+
+  const renderFooter = () => (
+    <Text className="font-dmsans text-tiny text-text-subtle text-center mt-3 pb-5">
+      {t('inbox.completedAnalysesDisappear')}
+    </Text>
+  );
+
+  return (
+    <ImageBackground
+      source={require('@/assets/images/bg-gradient.png')}
+      className="flex-1"
+      resizeMode="cover"
+    >
+      <FlatList
+        data={jobs}
+        keyExtractor={(item) => item.jobId}
+        renderItem={({ item, index }) => (
+          <InboxJobCard
+            job={item}
+            onPress={() => onJobPress(item)}
+            onDelete={() => onDeleteJob(item)}
+            animIndex={index}
+          />
+        )}
+        contentContainerStyle={{
+          paddingTop: insets.top + 24,
+          paddingHorizontal: 16,
+          paddingBottom: insets.bottom + 120,
+        }}
+        ItemSeparatorComponent={() => <View className="h-3" />}
+        ListHeaderComponent={renderHeader}
+        ListFooterComponent={renderFooter}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.textPrimary}
+            progressViewOffset={insets.top}
+          />
+        }
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+      />
+    </ImageBackground>
+  );
+}
+
+// ── Error State Component ─────────────────────────────────────────────────────
+
+function ErrorState({ error, onRetry }: { error: string; onRetry: () => void }) {
+  const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
+
+  return (
+    <ImageBackground
+      source={require('@/assets/images/bg-gradient.png')}
+      className="flex-1"
+      resizeMode="cover"
+    >
+      <View
+        className="flex-1 justify-center items-center px-6"
+        style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}
+      >
+        <View className="w-16 h-16 rounded-full bg-error-bg justify-center items-center mb-4">
+          <Icon name="error-warning-line" size={32} color={colors.error} />
+        </View>
+        <Text className="font-dmsans-medium text-body text-text-primary text-center mb-2">
+          {t('inbox.whoops')}
+        </Text>
+        <Text className="font-dmsans text-small text-text-muted text-center mb-6">
+          {error}
+        </Text>
+        <PrimaryButton
+          title={t('common.retry')}
+          leftIcon="refresh-line"
+          onPress={onRetry}
+        />
+      </View>
+    </ImageBackground>
+  );
+}
+
+// ── Main Component ────────────────────────────────────────────────────────────
 
 export default function InboxPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
+  const { registerHandler, unregisterHandler } = useAnalysis();
+  const [jobs, setJobs] = useState<InboxJob[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [jobs,         setJobs]         = useState<InboxJob[]>([]);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [loading,      setLoading]      = useState(true);
-  const [refreshing,   setRefreshing]   = useState(false);
-  const [error,        setError]        = useState<string | null>(null);
-
-  // FAB — web: motion initial scale:0 → animate scale:1
-  const fabScale = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.spring(fabScale, { toValue: 1, useNativeDriver: true }).start();
-  }, []);
-
-  const inProgressCount = jobs.filter(
-    (j) => ['pending', 'downloading', 'analyzing'].includes(j.status)
-  ).length;
-
-  const loadFromDb = useCallback(async (showLoader = true) => {
+  // Load jobs from API
+  const loadJobs = useCallback(async (showLoader = true) => {
     if (!user?.id) {
       setLoading(false);
       return;
     }
+
     if (showLoader) setLoading(true);
     else setRefreshing(true);
     setError(null);
 
     try {
-      const fetched = await apiFetch<InboxJob[]>('/inbox');
-      const now = Date.now();
-      setJobs(prev => {
-        // Garde les jobs optimistes qui ne sont pas encore dans la DB (max 15s)
-        const keepOptimistic = prev.filter(j =>
-          j.isLocal &&
-          !fetched.some(f => f.sourceUrl === j.sourceUrl) &&
-          now - new Date(j.createdAt).getTime() < 15_000
-        );
-        return [...keepOptimistic, ...fetched];
-      });
+      const fetched = await fetchInboxJobs();
+      setJobs((prev) => mergeWithOptimisticJobs(prev, fetched));
     } catch (err: any) {
-      setError('Impossible de charger vos analyses.');
+      console.error('Failed to load jobs:', err);
+      setError(t('inbox.unableToLoad'));
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [user?.id]);
+  }, [user?.id, t]);
 
+  // Load on mount
   useEffect(() => {
-    loadFromDb(true);
-  }, [loadFromDb]);
+    loadJobs(true);
+  }, [loadJobs]);
 
-  // Rechargement à chaque focus (retour sur l'onglet)
-  useFocusEffect(useCallback(() => {
-    loadFromDb(false);
-  }, [loadFromDb]));
+  // Reload on tab focus
+  useFocusEffect(
+    useCallback(() => {
+      loadJobs(false);
+    }, [loadJobs])
+  );
 
-  // Polling 15s si jobs en cours
+  // Poll every 15s if jobs are in progress
+  const inProgressCount = jobs.filter((j) => isJobInProgress(j.status)).length;
+
   useEffect(() => {
     if (inProgressCount === 0) return;
-    const interval = setInterval(() => loadFromDb(false), 15_000);
+    const interval = setInterval(() => loadJobs(false), 15_000);
     return () => clearInterval(interval);
-  }, [inProgressCount, loadFromDb]);
+  }, [inProgressCount, loadJobs]);
 
-  const handleJobClick = (job: InboxJob) => {
-    if (job.status !== 'done') return;
+  // Start analysis
+  const handleAnalysisStarted = useCallback(async (url: string) => {
+    if (!user?.id) return;
 
-    // Route based on entity type
-    if (job.entityType === 'city' && job.cityId) {
-      router.push(`/review/city/${job.cityId}`);
-    } else if (job.tripId) {
-      router.push(`/review/${job.tripId}`);
+    setIsSubmitting(true);
+
+    const optimisticJob = createOptimisticJob(url);
+    setJobs((prev) => [optimisticJob, ...prev]);
+
+    try {
+      await startAnalysis(url, user.id);
+      await loadJobs(false);
+
+      // Envoyer une notification locale au lieu d'une Alert
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: t('inbox.analysisStarted'),
+          body: t('inbox.videoBeingAnalyzed'),
+          data: { type: 'analysis_started' },
+        },
+        trigger: null, // Notification immédiate
+      });
+    } catch (err: any) {
+      console.error('Failed to start analysis:', err);
+      setJobs((prev) => prev.filter((j) => j.jobId !== optimisticJob.jobId));
+
+      Alert.alert(
+        t('inbox.error'),
+        err.message || t('inbox.cannotStartAnalysis'),
+        [{ text: t('common.ok') }]
+      );
+    } finally {
+      setIsSubmitting(false);
     }
-  };
+  }, [user?.id, loadJobs, t]);
 
+  // Register / unregister handler so the TabBar can trigger analysis from anywhere
+  useEffect(() => {
+    registerHandler(handleAnalysisStarted);
+    return () => unregisterHandler();
+  }, [handleAnalysisStarted, registerHandler, unregisterHandler]);
+
+  // Delete job
   const handleDeleteJob = (job: InboxJob) => {
     Alert.alert(
-      'Supprimer cette analyse ?',
-      `Toutes les données associées à "${job.title}" seront supprimées définitivement.`,
+      t('inbox.deleteAnalysis'),
+      t('inbox.allDataAssociatedWillBeDeleted', { title: job.title }),
       [
-        { text: 'Annuler', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Supprimer',
+          text: t('common.delete'),
           style: 'destructive',
           onPress: async () => {
             try {
-              await apiDelete(`/inbox/${job.jobId}`);
+              await deleteInboxJob(job.jobId);
               setJobs((prev) => prev.filter((j) => j.jobId !== job.jobId));
+              // Marquer les notifications liées comme lues
+              const entityId = job.cityId || job.tripId;
+              if (entityId) {
+                markNotificationsReadByEntity(job.entityType, entityId);
+              }
             } catch (err) {
-              Alert.alert('Erreur', 'Impossible de supprimer cette analyse.');
+              Alert.alert(t('inbox.error'), t('inbox.cannotDelete'));
             }
           },
         },
@@ -460,136 +562,53 @@ export default function InboxPage() {
     );
   };
 
-  return (
-    <View className="flex-1 bg-black">
-      {/* ── Chargement initial ───────────────────────────────────────────────── */}
-      {loading ? (
-        <View className="flex-1 items-center justify-center" style={{ paddingTop: insets.top }}>
-          <SpinningLoader size={32} color="#60a5fa" />
-        </View>
-      ) : (
-        <FlatList
-          data={jobs}
-          keyExtractor={(item) => item.jobId}
-          contentContainerStyle={{ paddingTop: insets.top + 24, paddingHorizontal: 16, paddingBottom: 24, gap: 12 }}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={() => loadFromDb(false)}
-              tintColor="#60a5fa"
-              progressViewOffset={insets.top}
-            />
-          }
-          ListHeaderComponent={
-            <>
-              {/* Erreur DB */}
-              {error && (
-                <View
-                  className="rounded-xl p-4 items-center mb-3"
-                  style={{
-                    backgroundColor: '#ef44441A', // red-500/10
-                    borderWidth: 1,
-                    borderColor: '#ef44444D',      // red-500/30
-                  }}
-                >
-                  <AlertCircle size={24} color="#fca5a5" /* red-300 */ />
-                  <Text className="text-sm text-red-300 my-2 text-center">{error}</Text>
-                  <Button variant="ghost" onPress={() => loadFromDb(true)}>
-                    Réessayer
-                  </Button>
-                </View>
-              )}
+  // Navigate to review
+  const handleJobPress = (job: InboxJob) => {
+    if (job.status !== 'done') return;
 
-              {/* Empty state — web: motion initial opacity:0 y:20 → animate opacity:1 y:0 */}
-              {!error && jobs.length === 0 && (
-                <View className="items-center py-16">
-                  <View className="w-20 h-20 bg-zinc-800 rounded-full items-center justify-center mb-4">
-                    <Share2 size={40} color="#52525b" /* zinc-600 */ />
-                  </View>
-                  <Text className="text-xl font-medium text-white mb-2">
-                    Aucune analyse pour le moment
-                  </Text>
-                  <Text
-                    className="text-zinc-400 text-center mb-6"
-                    style={{ maxWidth: 280 }}
-                  >
-                    Partagez une vidéo TikTok ou Instagram pour extraire votre itinéraire
-                  </Text>
-                  {/* web: Button bg-gradient-to-r from-blue-600 to-purple-600 */}
-                  <TouchableOpacity
-                    onPress={() => setShowAddModal(true)}
-                    className="flex-row items-center gap-2 px-4 py-2 rounded-lg"
-                    style={{ backgroundColor: '#2563eb' /* blue-600 */ }}
-                  >
-                    <Plus size={20} color="#ffffff" />
-                    <Text className="text-white font-medium">Analyser une vidéo</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </>
-          }
-          renderItem={({ item, index }) => (
-            <JobCard
-              job={item}
-              onPress={() => handleJobClick(item)}
-              onDelete={() => handleDeleteJob(item)}
-              animIndex={index}
-            />
-          )}
-          ListFooterComponent={
-            jobs.length > 0 ? (
-              <Text className="text-center text-xs text-zinc-500 pt-2">
-                Les analyses terminées disparaissent une fois le voyage validé
-              </Text>
-            ) : null
-          }
-        />
-      )}
+    // Marquer les notifications liées comme lues
+    const entityId = job.cityId || job.tripId;
+    if (entityId) {
+      markNotificationsReadByEntity(job.entityType, entityId);
+    }
 
-      {/* ── FAB ─────────────────────────────────────────────────────────────── */}
-      {/* web: fixed bottom-24 right-4 w-14 h-14 rounded-full bg-gradient from-blue-600 to-purple-600 */}
-      <Animated.View
-        className="absolute bottom-24 right-4"
-        style={{ transform: [{ scale: fabScale }] }}
-      >
-        <Pressable
-          onPress={() => setShowAddModal(true)}
-          className="w-14 h-14 rounded-full items-center justify-center"
-          style={{
-            backgroundColor: '#7c3aed', // violet-700 — centre du gradient blue→purple
-            shadowColor: '#7c3aed',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.4,
-            shadowRadius: 12,
-            elevation: 8,
-          }}
-        >
-          <Sparkles size={24} color="#ffffff" />
-        </Pressable>
-      </Animated.View>
+    if (job.entityType === 'city' && job.cityId) {
+      router.push(`/review/city/${job.cityId}`);
+    } else if (job.tripId) {
+      router.push(`/review/${job.tripId}`);
+    }
+  };
 
-      {/* ── Modal ajout ─────────────────────────────────────────────────────── */}
-      <AddTripModal
-        isOpen={showAddModal}
-        onClose={() => setShowAddModal(false)}
-        onAnalysisStarted={(url) => {
-          const optimistic: InboxJob = {
-            jobId: `optimistic-${Date.now()}`,
-            tripId: null,
-            cityId: null,
-            entityType: 'trip',
-            title: url,
-            sourceUrl: url,
-            platform: detectPlatform(url),
-            createdAt: new Date().toISOString(),
-            status: 'pending',
-            progressPct: 0,
-            errorMessage: null,
-            isLocal: true,
-          };
-          setJobs(prev => [optimistic, ...prev]);
-        }}
+  // Case 1: Initial loading
+  if (loading && jobs.length === 0) {
+    return <LoadingState />;
+  }
+
+  // Case 2: Error (no jobs)
+  if (error && jobs.length === 0) {
+    return <ErrorState error={error} onRetry={() => loadJobs(true)} />;
+  }
+
+  // Case 3: Jobs list
+  if (jobs.length > 0) {
+    return (
+      <JobsList
+        jobs={jobs}
+        onAnalysisStarted={handleAnalysisStarted}
+        onDeleteJob={handleDeleteJob}
+        onJobPress={handleJobPress}
+        onRefresh={() => loadJobs(false)}
+        isSubmitting={isSubmitting}
+        isRefreshing={refreshing}
       />
-    </View>
+    );
+  }
+
+  // Case 4: Empty state (default)
+  return (
+    <EmptyState
+      onAnalysisStarted={handleAnalysisStarted}
+      isSubmitting={isSubmitting}
+    />
   );
 }

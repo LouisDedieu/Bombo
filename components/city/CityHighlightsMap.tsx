@@ -2,12 +2,12 @@
  * CityHighlightsMap - Map view for city highlights with geocoding support
  * Similar to InteractiveHeroMap but adapted for city POIs
  */
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, Animated, Easing } from 'react-native';
-import MapView, { Marker, Callout, Region } from 'react-native-maps';
-import { Loader2 } from 'lucide-react-native';
-import { Highlight, HighlightCategory } from '@/types/api';
-import { updateHighlightCoordinates } from '@/services/cityReviewService';
+import React, {useEffect, useRef, useState} from 'react';
+import {Text, View} from 'react-native';
+import MapView, {Callout, Marker, Region} from 'react-native-maps';
+import {Highlight, HighlightCategory} from '@/types/api';
+import {updateHighlightCoordinates} from '@/services/cityReviewService';
+import Loader from "@/components/Loader";
 
 const CATEGORY_COLORS: Record<HighlightCategory, string> = {
   food: '#f97316',
@@ -44,29 +44,6 @@ function normalizeTextForLocationIQAPI(text: string): string {
     .trim();
 }
 
-function SpinningLoader({ size = 24, color = '#a855f7' }: { size?: number; color?: string }) {
-  const rotation = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.loop(
-      Animated.timing(rotation, {
-        toValue: 1,
-        duration: 1000,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      })
-    ).start();
-  }, []);
-
-  const spin = rotation.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
-
-  return (
-    <Animated.View style={{ transform: [{ rotate: spin }] }}>
-      <Loader2 size={size} color={color} />
-    </Animated.View>
-  );
-}
-
 interface CityHighlightsMapProps {
   highlights: Highlight[];
   cityName: string;
@@ -75,6 +52,10 @@ interface CityHighlightsMapProps {
   cityLon?: number;
   selectedCategories?: HighlightCategory[];
   height?: number;
+  /** Hide the internal approximate badge (for custom placement) */
+  hideApproximateBadge?: boolean;
+  /** Callback with approximate count when results are ready */
+  onApproximateCount?: (count: number) => void;
 }
 
 export function CityHighlightsMap({
@@ -85,6 +66,8 @@ export function CityHighlightsMap({
   cityLon,
   selectedCategories = [],
   height = 200,
+  hideApproximateBadge = false,
+  onApproximateCount,
 }: CityHighlightsMapProps) {
   const [results, setResults] = useState<GeocodingResult[]>([]);
   const [loading, setLoading] = useState(true);
@@ -237,6 +220,13 @@ export function CityHighlightsMap({
 
   const approximateResults = filteredResults.filter((r) => r.confidence === 'low');
 
+  // Notify parent of approximate count
+  useEffect(() => {
+    if (!loading && onApproximateCount) {
+      onApproximateCount(approximateResults.length);
+    }
+  }, [loading, approximateResults.length, onApproximateCount]);
+
   // Loading state
   if (loading) {
     return (
@@ -244,8 +234,8 @@ export function CityHighlightsMap({
         style={{ height, backgroundColor: '#18181b', borderRadius: 12 }}
         className="items-center justify-center gap-2"
       >
-        <SpinningLoader size={24} color="#a855f7" />
-        <Text className="text-zinc-500 text-xs">Localisation des points...</Text>
+        <Loader size={40} />
+        <Text className="text-muted-micro">Localisation des points...</Text>
       </View>
     );
   }
@@ -257,7 +247,7 @@ export function CityHighlightsMap({
         style={{ height, backgroundColor: '#18181b', borderRadius: 12 }}
         className="items-center justify-center"
       >
-        <Text className="text-zinc-500 text-xs">Aucun point a afficher</Text>
+        <Text className="text-muted-micro">Aucun point a afficher</Text>
       </View>
     );
   }
@@ -395,7 +385,7 @@ export function CityHighlightsMap({
       </View>
 
       {/* Approximate warning */}
-      {approximateResults.length > 0 && (
+      {!hideApproximateBadge && approximateResults.length > 0 && (
         <View
           style={{
             position: 'absolute',

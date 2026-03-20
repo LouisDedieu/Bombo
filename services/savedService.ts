@@ -7,6 +7,22 @@ import { EntityType } from '@/types/api';
 export type SavedFilter = 'all' | 'trip' | 'city';
 
 /**
+ * Day data for trips (spots count per day)
+ */
+export interface DayData {
+  day_number: number;
+  spots_count: number;
+}
+
+/**
+ * Category data for cities (highlights count per category)
+ */
+export interface CategoryData {
+  category: 'food' | 'culture' | 'nature' | 'shopping' | 'nightlife' | 'other';
+  count: number;
+}
+
+/**
  * Unified saved item structure
  */
 export interface SavedItem {
@@ -23,6 +39,8 @@ export interface SavedItem {
   notes: string | null;
   source_url: string | null;
   content_creator_handle: string | null;
+  days?: DayData[];
+  categories?: CategoryData[];
 }
 
 /**
