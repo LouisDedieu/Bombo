@@ -10,7 +10,7 @@ import type { AuthError, Session } from "@supabase/supabase-js";
 import { Linking, Platform } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as AppleAuthentication from 'expo-apple-authentication';
-import { syncJwtToSharedStorage } from '../lib/syncJwtToSharedStorage';
+import { syncJwtToSharedStorage, clearJwtFromSharedStorage } from '../lib/syncJwtToSharedStorage';
 
 const OAUTH_REDIRECT_URI = 'oneday://auth/callback';
 
@@ -211,7 +211,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       email,
       password,
       options: {
-        emailRedirectTo: `${getOrigin()}/`,
+        emailRedirectTo: `${getOrigin()}/confirm`,
       },
     });
 
@@ -390,6 +390,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (TEST_MODE) {
       console.warn("[Auth] Sign-out disabled in test mode");
       return;
+    }
+    if (Platform.OS === 'ios') {
+      await clearJwtFromSharedStorage();
     }
     await supabase.auth.signOut();
   }, []);

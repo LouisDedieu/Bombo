@@ -51,3 +51,14 @@ app-example
 
 *storybook.log
 storybook-static
+/.agents/
+/.claude/
+/.paperclip-config/
+/ai-marketing-claude-code-skills/
+/app-store-screenshots/
+/create-viral-content/
+/.opencode/
+/.paperclip/
+/.paperclip-config-dev-company/
+/ai-marketing-claude-code-skills/
+/tasks/

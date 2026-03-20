@@ -14,14 +14,20 @@
 
 | Couche | Technologies |
 |--------|--------------|
-| **Frontend** | React Native 0.81.5 + Expo 54, React 19.1, TypeScript 5.9 |
+| **Frontend** | React Native 0.83.2 + Expo 55, React 19.2.0, TypeScript 5.9 |
 | **Routing** | Expo Router v6 (file-based) |
 | **Styling** | NativeWind v4.2.1 (Tailwind pour RN) |
 | **Auth** | Supabase (JWT, AsyncStorage, Secure Store) |
 | **Backend** | FastAPI (hébergé sur Render) |
 | **Maps** | React Native Maps v1.20.1 |
-| **Animations** | Reanimated v4.1.1 |
+| **Animations** | Reanimated v4.2.1 |
 | **Drag & Drop** | react-native-draggable-flatlist v4.0.3 |
+| **Graphics** | Shopify React Native Skia v2.5.1 |
+| **Bottom Sheet** | @gorhom/bottom-sheet v5.2.8 |
+| **Toasts** | Sonner Native v0.23.1 |
+| **Analytics** | PostHog React Native v4.37.3 |
+| **i18n** | i18next v25 + react-i18next v16 + expo-localization |
+| **Testing** | Storybook v10.2 |
 | **Icons** | Lucide React Native v0.574.0, Expo Vector Icons |
 | **Build** | EAS (Expo Application Services) |
 

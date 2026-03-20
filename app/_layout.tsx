@@ -11,7 +11,7 @@ import { useAuthGuardState, LoadingScreen, NetworkErrorScreen, EmailPendingScree
 import DebugPanel from '../components/DebugPanel';
 import { useCallback, useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { syncJwtToSharedStorage } from '@/lib/syncJwtToSharedStorage';
+import { syncJwtToSharedStorage, clearJwtFromSharedStorage } from '@/lib/syncJwtToSharedStorage';
 import { useAndroidShareHandler } from '@/hooks/useAndroidShareHandler';
 import { useFonts, Righteous_400Regular } from '@expo-google-fonts/righteous';
 import {
@@ -120,9 +120,11 @@ export default function RootLayout() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.access_token) {
         syncJwtToSharedStorage().catch(() => {});
+      } else if (event === 'SIGNED_OUT') {
+        clearJwtFromSharedStorage().catch(() => {});
       }
     });
 

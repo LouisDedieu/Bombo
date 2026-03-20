@@ -121,3 +121,47 @@ import { colors } from '@/constants/colors';
 - Composants : `PascalCase.tsx`
 - Hooks : `useHookName.ts`
 - Constantes : `camelCase.ts`
+
+---
+
+## Workflow Agent (Paperclip)
+
+### Début de chaque session
+1. Lire ce fichier (`CLAUDE.md`)
+2. Lire `docs/STATE_OF_THE_ART.md`
+3. Lire `tasks/lessons.md`
+4. Écrire le plan dans `tasks/todo.md` avant de coder
+
+### Avant de pusher
+- `npx tsc --noEmit` — zéro erreur TypeScript
+- `npx eslint [fichiers modifiés]` — zéro warning
+- Tester sur iOS simulator si changement UI
+- Mettre à jour `docs/STATE_OF_THE_ART.md`
+- Cocher les étapes dans `tasks/todo.md`
+
+### Règles critiques
+- Ne jamais modifier `app.json`, `eas.json`, ou les configs de build sans validation explicite de Louis
+- Ne jamais changer les variables d'environnement `.env`
+- Ne jamais toucher à `share-extension/` sans validation — c'est fragile
+- Changer le minimum de code nécessaire pour résoudre le problème
+
+### Commit format
+```
+feat(ONEA-XX): description courte
+
+- détail 1
+- détail 2
+
+Co-Authored-By: Paperclip <noreply@paperclip.ing>
+```
+
+### Erreurs Passées & Règles Apprises
+
+> Mis à jour par les agents après chaque correction de Louis.
+> Format : `- [ONEA-XX] Ce qui était faux → Ce qu'il faut faire`
+
+*(vide pour l'instant)*
+
+---
+
+*Workflow section ajoutée : Mars 2026*
