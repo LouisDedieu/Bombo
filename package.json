@@ -11,7 +11,10 @@
     "storybook-generate": "sb-rn-get-stories",
     "sb": "STORYBOOK=true expo start",
     "sb:ios": "STORYBOOK=true expo run:ios",
-    "sb:android": "STORYBOOK=true expo run:android"
+    "sb:android": "STORYBOOK=true expo run:android",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
   },
   "expo": {
     "doctor": {
@@ -95,10 +98,13 @@
     "tailwind-merge": "^3.4.1"
   },
   "devDependencies": {
+    "@testing-library/react-native": "^13.0.0",
+    "@types/jest": "^29.5.14",
     "@types/react": "^19.2.10",
     "babel-preset-expo": "^55.0.8",
     "eslint": "^9.25.0",
     "eslint-config-expo": "^55.0.0",
+    "jest": "^29.7.0",
     "patch-package": "^8.0.1",
     "prettier-plugin-tailwindcss": "^0.5.11",
     "react-native-svg-transformer": "^1.5.3",
