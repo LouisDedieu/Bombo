@@ -139,6 +139,56 @@ import { colors } from '@/constants/colors';
 - Mettre à jour `docs/STATE_OF_THE_ART.md`
 - Cocher les étapes dans `tasks/todo.md`
 
+### Tests
+
+**Lancer les tests frontend :**
+```bash
+npx jest                                    # Tous les tests
+npx jest __tests__/nomDuTest.test.ts        # Un test spécifique
+npx jest --watch                            # Mode watch
+```
+
+**Structure des tests :**
+- Dossier : `__tests__/`
+- Nommage : `nomDuFichier.test.ts`
+- Framework : Jest avec mocks pour Supabase et fetch
+
+### Workflow Git
+
+**Créer une feature branch :**
+```bash
+git stash push -m "description"
+git checkout main && git pull origin main
+git checkout -b feature/nom-de-la-feature
+git stash pop
+```
+
+**Commit et PR :**
+```bash
+git add [fichiers]
+git commit -m "feat: description
+
+- détail 1
+- détail 2
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
+
+git push -u origin feature/nom-de-la-feature
+gh pr create --title "feat: titre" --body "## Summary
+- Point 1
+- Point 2
+
+## Test plan
+- [ ] Test 1
+- [ ] Test 2
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)"
+```
+
+**Repos liés :**
+- Frontend : `LouisDedieu/Bombo`
+- Backend : `LouisDedieu/BOMBO-backend` (dossier local : `BOMBO IA`)
+
 ### Règles critiques
 - Ne jamais modifier `app.json`, `eas.json`, ou les configs de build sans validation explicite de Louis
 - Ne jamais changer les variables d'environnement `.env`

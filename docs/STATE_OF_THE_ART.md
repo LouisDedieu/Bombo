@@ -111,6 +111,7 @@ share-extension/             # Extension de partage iOS/Android
 - `GET /trips/saved` → Trips sauvegardés
 - `POST /trips/{tripId}/save` → Sauvegarder un trip
 - `DELETE /trips/{tripId}/save` → Retirer de la collection
+- `POST /trips/{tripId}/validate-and-save` → **NEW** Valide et sauvegarde atomiquement (transactionnel)
 
 ### Review Trips
 - `GET /review/{tripId}` → Trip pour édition
@@ -297,6 +298,7 @@ Highlight {
 | `saveTrip(userId, tripId, notes?)` | `POST /trips/{tripId}/save` | Sauvegarde avec notes optionnelles |
 | `unsaveTrip(userId, tripId)` | `DELETE /trips/{tripId}/save` | Retire de la collection |
 | `toggleSaveTrip(...)` | — | Toggle save/unsave, retourne nouvel état |
+| `validateAndSaveTrip(tripId, notes?)` | `POST /trips/{tripId}/validate-and-save` | **NEW** Opération atomique : syncDestinations + saveTrip en transaction |
 | `updateSpotCoordinates(...)` | `PATCH /review/spots/{spotId}/coordinates` | MAJ GPS d'un spot |
 | `updateDestinationCoordinates(...)` | `PATCH /review/destinations/{destId}/coordinates` | MAJ GPS destination |
 
@@ -589,6 +591,12 @@ SEASON_EMOJI = {
 - Les modifications locales sont appliquées immédiatement
 - Rollback en cas d'erreur API
 - Refresh complet si échec de rollback
+
+### Opérations Atomiques (NEW - Mars 2026)
+- **validateAndSaveTrip** : Combine syncDestinations + saveTrip en une seule transaction PostgreSQL
+- Utilise une fonction RPC PostgreSQL (`validate_and_save_trip`) pour garantir l'atomicité
+- Si une étape échoue, toutes les modifications sont automatiquement annulées (rollback)
+- Migration SQL : `migrations/001_validate_and_save_trip.sql` (à appliquer dans Supabase)
 
 ### Système de Merge (NEW)
 - Détection automatique de villes existantes par nom
