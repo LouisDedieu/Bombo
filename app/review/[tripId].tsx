@@ -20,13 +20,12 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import Icon from 'react-native-remix-icon';
-import { isTripSaved, saveTrip, unsaveTrip } from '@/services/tripService';
+import { isTripSaved, unsaveTrip, validateAndSaveTrip } from '@/services/tripService';
 import { markNotificationsReadByEntity } from '@/services/notificationService';
 import { useAuth } from '@/context/AuthContext';
 import {
   fetchTripForReview,
   setDayValidated,
-  syncDestinations,
   updateSpot,
   deleteSpot,
 } from '@/services/reviewService';
@@ -607,7 +606,7 @@ export default function ReviewModePage() {
     .map((d) => d.location)
     .filter((loc): loc is string => !!loc) || [];
 
-  // handleValidate — web: save/unsave + syncDestinations
+  // handleValidate — opération atomique (transactionnelle) pour valider et sauvegarder
   const handleValidate = async () => {
     if (!trip || !user?.id) return;
     setValidating(true);
@@ -616,8 +615,9 @@ export default function ReviewModePage() {
         await unsaveTrip(user.id, trip.id);
         setIsSaved(false);
       } else {
-        await syncDestinations(trip.id);
-        await saveTrip(user.id, trip.id);
+        // Opération atomique : syncDestinations + saveTrip en une seule transaction
+        // Si une étape échoue, tout est annulé (rollback)
+        await validateAndSaveTrip(trip.id);
         setIsSaved(true);
         router.replace('/(tabs)/trips');
       }

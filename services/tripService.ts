@@ -54,6 +54,18 @@ export async function toggleSaveTrip(
   }
 }
 
+/**
+ * Valide et sauvegarde un trip de manière atomique (transactionnelle).
+ * Combine syncDestinations + saveTrip en une seule opération.
+ * Si une étape échoue, toutes les modifications sont annulées.
+ */
+export async function validateAndSaveTrip(
+  tripId: string,
+  notes?: string
+): Promise<{ success: boolean; synced: boolean; saved: boolean }> {
+  return apiPost(`/trips/${tripId}/validate-and-save`, notes ? { notes } : {});
+}
+
 /** Get all trips saved by the current user */
 export async function getUserSavedTrips(_userId: string) {
   return apiFetch<any[]>('/trips/saved');
