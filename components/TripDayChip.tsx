@@ -1,6 +1,21 @@
-import React from 'react';
-import { View, Text, type StyleProp, type ViewStyle } from 'react-native';
+import React, { memo } from 'react';
+import {
+  Pressable,
+  View,
+  Text,
+  StyleSheet,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import { useTranslation } from 'react-i18next';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from 'react-native-reanimated';
+import { colors } from '@/constants/colors';
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 // ---------------------------------------------------------------------------
 // Types
@@ -14,49 +29,49 @@ export type CategoryType =
   | 'nature'
   | 'other';
 
-interface CategoryChipProps {
+interface BaseChipProps {
+  style?: StyleProp<ViewStyle>;
+}
+
+interface CategoryChipProps extends BaseChipProps {
   variant: 'category';
   category: CategoryType;
   count: number;
-  style?: StyleProp<ViewStyle>;
 }
 
-interface DayChipProps {
+interface DayChipProps extends BaseChipProps {
   variant: 'day';
   dayNumber: number;
   count: number;
-  style?: StyleProp<ViewStyle>;
 }
 
-interface MoreDaysChipProps {
+interface MoreDaysChipProps extends BaseChipProps {
   variant: 'moreDays';
   daysCount: number;
-  style?: StyleProp<ViewStyle>;
 }
 
-export type TripDayChipProps = CategoryChipProps | DayChipProps | MoreDaysChipProps;
+interface SelectorChipProps extends BaseChipProps {
+  variant: 'selector';
+  dayNumber: number;
+  count: number;
+  isSelected: boolean;
+  onPress: () => void;
+}
 
-// ---------------------------------------------------------------------------
-// Category Labels (translated)
-// ---------------------------------------------------------------------------
-
-const getCategoryLabel = (category: CategoryType, t: (key: string) => string): string => {
-  switch (category) {
-    case 'food': return t('tripDayChip.food');
-    case 'culture': return t('tripDayChip.culture');
-    case 'nightlife': return t('tripDayChip.nightlife');
-    case 'shopping': return t('tripDayChip.shopping');
-    case 'nature': return t('tripDayChip.nature');
-    case 'other': return t('tripDayChip.other');
-    default: return category;
-  }
-};
+export type TripDayChipProps =
+  | CategoryChipProps
+  | DayChipProps
+  | MoreDaysChipProps
+  | SelectorChipProps;
 
 // ---------------------------------------------------------------------------
 // Category Configuration
 // ---------------------------------------------------------------------------
 
-const CATEGORY_CONFIG = {
+const CATEGORY_CONFIG: Record<
+  CategoryType,
+  { emoji: string; overlayColor: string; textColor: string }
+> = {
   food: {
     emoji: '🍽️',
     overlayColor: 'rgba(255, 88, 5, 0.2)',
@@ -85,47 +100,208 @@ const CATEGORY_CONFIG = {
   other: {
     emoji: '📍',
     overlayColor: 'rgba(150, 150, 150, 0.2)',
-    textColor: '#8C92B5',
+    textColor: colors.social,
   },
-} as const;
+};
 
 // ---------------------------------------------------------------------------
-// Base Colors
+// Styles (static - created once)
 // ---------------------------------------------------------------------------
 
-const BASE_BG = '#49447D';
-const BADGE_BG = '#292461';
-const LABEL_COLOR = 'rgba(255, 255, 255, 0.6)';
+const styles = StyleSheet.create({
+  // Base containers
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  chipBase: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+    backgroundColor: colors.chipBg,
+  },
+
+  // Small chips (day, category, moreDays)
+  chipSmall: {
+    height: 10,
+    borderRadius: 3,
+  },
+
+  // Large chips (selector)
+  chipLarge: {
+    paddingLeft: 10,
+    height: 24,
+    borderRadius: 6,
+  },
+
+  // Text styles
+  textSmall: {
+    fontFamily: 'DMSans-SemiBold',
+    fontSize: 7,
+    lineHeight: 9,
+    color: colors.textMuted,
+  },
+  textLarge: {
+    fontFamily: 'DMSans-SemiBold',
+    fontSize: 11,
+    lineHeight: 14,
+  },
+  textEmoji: {
+    fontSize: 6,
+    lineHeight: 8,
+  },
+
+  // Badge styles
+  badgeSmall: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 2,
+    marginLeft: 3,
+    height: 10,
+    backgroundColor: colors.chipBadgeBg,
+  },
+  badgeLarge: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 5,
+    paddingVertical: 6,
+    marginLeft: 6,
+    borderTopRightRadius: 6,
+    borderBottomRightRadius: 6,
+  },
+  badgeTextSmall: {
+    fontFamily: 'DMSans-SemiBold',
+    fontSize: 6,
+    lineHeight: 8,
+    color: colors.chipBadgeText,
+  },
+  badgeTextLarge: {
+    fontFamily: 'DMSans-SemiBold',
+    fontSize: 10,
+    lineHeight: 12,
+  },
+
+  // Overlay
+  overlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Reusable Badge Component
+// ---------------------------------------------------------------------------
+
+interface BadgeProps {
+  count: number;
+  size: 'small' | 'large';
+  textColor?: string;
+  bgColor?: string;
+  overlayColor?: string;
+}
+
+const Badge = memo(function Badge({
+  count,
+  size,
+  textColor = colors.chipBadgeText,
+  bgColor = colors.chipBadgeBg,
+  overlayColor,
+}: BadgeProps) {
+  const isSmall = size === 'small';
+
+  return (
+    <View
+      style={[
+        isSmall ? styles.badgeSmall : styles.badgeLarge,
+        { backgroundColor: bgColor },
+      ]}
+    >
+      {overlayColor && (
+        <View style={[styles.overlay, { backgroundColor: overlayColor }]} />
+      )}
+      <Text
+        style={[
+          isSmall ? styles.badgeTextSmall : styles.badgeTextLarge,
+          { color: textColor },
+        ]}
+      >
+        {count}
+      </Text>
+    </View>
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Selector Chip (Day variant with animation + pressable)
+// ---------------------------------------------------------------------------
+
+const SelectorChip = memo(function SelectorChip({
+  dayNumber,
+  count,
+  isSelected,
+  onPress,
+  style,
+}: SelectorChipProps) {
+  const { t } = useTranslation();
+  const scale = useSharedValue(1);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  const handlePressIn = () => {
+    scale.value = withSpring(0.95, { damping: 8, stiffness: 600, mass: 0.4 });
+  };
+
+  const handlePressOut = () => {
+    scale.value = withSpring(1, { damping: 6, stiffness: 300, mass: 0.3 });
+  };
+
+  const bgColor = isSelected ? colors.accent : colors.chipBg;
+  const labelColor = isSelected ? colors.textPrimary : colors.textMuted;
+  const badgeBg = isSelected ? 'rgba(255, 255, 255, 0.25)' : colors.chipBadgeBg;
+  const badgeText = isSelected ? colors.textPrimary : colors.chipBadgeText;
+
+  return (
+    <AnimatedPressable
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      style={[animatedStyle, style]}
+    >
+      <View style={[styles.chipBase, styles.chipLarge, { backgroundColor: bgColor }]}>
+        <Text style={[styles.textLarge, { color: labelColor }]}>
+          {t('tripDayChip.day', { number: dayNumber })}
+        </Text>
+        <Badge count={count} size="large" textColor={badgeText} bgColor={badgeBg} />
+      </View>
+    </AnimatedPressable>
+  );
+});
 
 // ---------------------------------------------------------------------------
 // TripDayChip Component
 // ---------------------------------------------------------------------------
 
-export function TripDayChip(props: TripDayChipProps) {
+export const TripDayChip = memo(function TripDayChip(props: TripDayChipProps) {
   const { t } = useTranslation();
   const { variant, style } = props;
 
-  // ── More Days Variant ─────────────────────────────────────────────────────
+  // ── Selector Variant ─────────────────────────────────────────────────────
+  if (variant === 'selector') {
+    return <SelectorChip {...props} />;
+  }
+
+  // ── More Days Variant ────────────────────────────────────────────────────
   if (variant === 'moreDays') {
     return (
-      <View className="flex-row items-center" style={style}>
-        <View
-          className="flex-row justify-center items-center"
-          style={{
-            paddingHorizontal: 5,
-            height: 10,
-            backgroundColor: BASE_BG,
-            borderRadius: 3,
-          }}
-        >
-          <Text
-            style={{
-              fontFamily: 'DMSans-SemiBold',
-              fontSize: 7,
-              lineHeight: 9,
-              color: LABEL_COLOR,
-            }}
-          >
+      <View style={[styles.row, style]}>
+        <View style={[styles.chipBase, styles.chipSmall, { paddingHorizontal: 5 }]}>
+          <Text style={styles.textSmall}>
             + {props.daysCount} {t('tripDayChip.days')}
           </Text>
         </View>
@@ -133,119 +309,42 @@ export function TripDayChip(props: TripDayChipProps) {
     );
   }
 
-  // ── Category Variant ──────────────────────────────────────────────────────
+  // ── Category Variant ─────────────────────────────────────────────────────
   if (variant === 'category') {
     const config = CATEGORY_CONFIG[props.category];
 
     return (
-      <View className="flex-row items-center" style={style}>
-        {/* Main chip with icon and label */}
-        <View
-          className="flex-row justify-center items-center overflow-hidden"
-          style={{
-            paddingLeft: 3,
-            height: 10,
-            backgroundColor: BASE_BG,
-            borderRadius: 3,
-          }}
-        >
-          {/* Overlay */}
-          <View
-            className="absolute inset-0"
-            style={{ backgroundColor: config.overlayColor }}
-          />
-          <Text style={{ fontSize: 6, lineHeight: 8 }}>{config.emoji}</Text>
-          <Text
-            style={{
-              fontFamily: 'DMSans-SemiBold',
-              fontSize: 7,
-              lineHeight: 9,
-              color: LABEL_COLOR,
-              marginLeft: 2,
-            }}
-          >
-            {getCategoryLabel(props.category, t)}
+      <View style={[styles.row, style]}>
+        <View style={[styles.chipBase, styles.chipSmall, { paddingLeft: 3 }]}>
+          <View style={[styles.overlay, { backgroundColor: config.overlayColor }]} />
+          <Text style={styles.textEmoji}>{config.emoji}</Text>
+          <Text style={[styles.textSmall, { marginLeft: 2 }]}>
+            {t(`tripDayChip.${props.category}`)}
           </Text>
-          {/* Count badge */}
-          <View
-            className="justify-center items-center"
-            style={{
-              paddingHorizontal: 2,
-              marginLeft: 3,
-              height: 10,
-              backgroundColor: BADGE_BG,
-            }}
-          >
-            {/* Badge overlay */}
-            <View
-              className="absolute inset-0"
-              style={{ backgroundColor: config.overlayColor }}
-            />
-            <Text
-              style={{
-                fontFamily: 'DMSans-SemiBold',
-                fontSize: 6,
-                lineHeight: 8,
-                color: config.textColor,
-              }}
-            >
-              {props.count}
-            </Text>
-          </View>
+          <Badge
+            count={props.count}
+            size="small"
+            textColor={config.textColor}
+            overlayColor={config.overlayColor}
+          />
         </View>
       </View>
     );
   }
 
-  // ── Day Variant ───────────────────────────────────────────────────────────
+  // ── Day Variant ──────────────────────────────────────────────────────────
   if (variant === 'day') {
     return (
-      <View className="flex-row items-center" style={style}>
-        {/* Main chip with day label */}
-        <View
-          className="flex-row justify-center items-center overflow-hidden"
-          style={{
-            paddingLeft: 5,
-            height: 10,
-            backgroundColor: BASE_BG,
-            borderRadius: 3,
-          }}
-        >
-          <Text
-            style={{
-              fontFamily: 'DMSans-SemiBold',
-              fontSize: 7,
-              lineHeight: 9,
-              color: LABEL_COLOR,
-            }}
-          >
+      <View style={[styles.row, style]}>
+        <View style={[styles.chipBase, styles.chipSmall, { paddingLeft: 5 }]}>
+          <Text style={styles.textSmall}>
             {t('tripDayChip.day', { number: props.dayNumber })}
           </Text>
-          {/* Count badge */}
-          <View
-            className="justify-center items-center"
-            style={{
-              paddingHorizontal: 2,
-              marginLeft: 3,
-              height: 10,
-              backgroundColor: BADGE_BG,
-            }}
-          >
-            <Text
-              style={{
-                fontFamily: 'DMSans-SemiBold',
-                fontSize: 6,
-                lineHeight: 8,
-                color: '#8E6DE8',
-              }}
-            >
-              {props.count}
-            </Text>
-          </View>
+          <Badge count={props.count} size="small" />
         </View>
       </View>
     );
   }
 
   return null;
-}
+});

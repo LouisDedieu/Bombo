@@ -375,7 +375,14 @@
     "delete": "Delete",
     "addCity": "Add a city",
     "noBudgetInfo": "No budget information available.",
-    "noPracticalInfo": "No practical information available."
+    "noPracticalInfo": "No practical information available.",
+    "overview": "Overview",
+    "daily": "Daily",
+    "selectDay": "Select a day",
+    "noSpotsForDay": "No spots for this day",
+    "noLocationForSpot": "No location for this spot",
+    "noDescription": "No description available",
+    "meals": "Meals"
   },
   "cityDetail": {
     "cityNotFound": "City not found.",
