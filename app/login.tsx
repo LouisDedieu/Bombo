@@ -367,11 +367,46 @@ export default function Login() {
             </View>
           )}
 
+          <TouchableOpacity
+            className={`flex-row items-center justify-center gap-2 rounded-[8px] h-10 mt-1 ${resending ? 'opacity-60' : 'bg-accent/20 border border-accent/40'}`}
+            onPress={handleResend}
+            disabled={resending}
+            activeOpacity={0.8}
+          >
+            {resending ? (
+              <Loader size={20} color="#a1a1aa" />
+            ) : (
+              <>
+                <Icon name="refresh-line" size={16} color="#8b8bf5" />
+                <Text className="text-[#8b8bf5] text-[13px] font-medium font-dmsans">{t('auth.resendConfirmationEmail')}</Text>
+              </>
+            )}
+          </TouchableOpacity>
+          
           {/* Error banner */}
           {error && (
-            <View className="flex-row items-start gap-2.5 rounded-[10px] px-[14px] py-3 bg-red-500/10 border border-red-500/20">
-              <Icon name={'alert-fill'} size={16} color="#f87171" />
-              <Text className="text-red-400 text-[13px] flex-1 leading-[18px] font-dmsans">{error}</Text>
+            <View className="gap-2.5 rounded-[10px] px-[14px] py-3 bg-red-500/10 border border-red-500/20">
+              <View className="flex-row items-start gap-2.5">
+                <Icon name={'alert-fill'} size={16} color="#f87171" />
+                <Text className="text-red-400 text-[13px] flex-1 leading-[18px] font-dmsans">{error}</Text>
+              </View>
+              {error === t('auth.confirmEmailFirst') && (
+                <TouchableOpacity
+                  className={`flex-row items-center justify-center gap-2 rounded-[8px] h-10 mt-1 ${resending ? 'opacity-60' : 'bg-accent/20 border border-accent/40'}`}
+                  onPress={handleResend}
+                  disabled={resending}
+                  activeOpacity={0.8}
+                >
+                  {resending ? (
+                    <Loader size={20} color="#a1a1aa" />
+                  ) : (
+                    <>
+                      <Icon name="refresh-line" size={16} color="#8b8bf5" />
+                      <Text className="text-accent text-[13px] font-medium font-dmsans">{t('auth.resendConfirmationEmail')}</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
             </View>
           )}
 

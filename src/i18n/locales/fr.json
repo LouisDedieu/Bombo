@@ -14,6 +14,7 @@
     "emailConfirmed": "Email confirmé ! Vous pouvez maintenant vous connecter.",
     "confirmationEmailSent": "Un lien de confirmation a été envoyé à {{email}}. Cliquez dessus pour activer votre compte.",
     "resendEmail": "Renvoyer l'email",
+    "resendConfirmationEmail": "Renvoyer l'email de confirmation",
     "backToLogin": "Retour à la connexion",
     "emailOrPasswordIncorrect": "Email ou mot de passe incorrect.",
     "confirmEmailFirst": "Confirmez votre email avant de vous connecter.",
