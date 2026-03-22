@@ -4,7 +4,7 @@
  */
 
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {Alert, Animated, Dimensions, Image, ImageBackground, Text, TouchableOpacity, View,} from 'react-native';
+import {Alert, Animated, Dimensions, Image, ImageBackground, Linking, ScrollView, Text, TouchableOpacity, View,} from 'react-native';
 import {LinearGradient} from 'expo-linear-gradient';
 import MaskedView from '@react-native-masked-view/masked-view';
 import Loader from '@/components/Loader';
@@ -13,22 +13,23 @@ import DraggableFlatList, {RenderItemParams, ScaleDecorator,} from 'react-native
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useFocusEffect, useLocalSearchParams, useRouter} from 'expo-router';
 import {useTranslation} from 'react-i18next';
-import {TripMap} from '@/components/map';
+import {TripMap, CityMap} from '@/components/map';
 import {getTrip} from '@/services/tripService';
 import {getUserSavedCities} from '@/services/cityService';
 import {useAuth} from '@/context/AuthContext';
-import {Destination} from '@/types/api';
+import {Destination, Highlight, HighlightCategory} from '@/types/api';
 import {AddCityToTripModal} from '@/components/trip/AddCityToTripModal';
 import type {DbDay as ReviewDbDay} from '@/services/reviewService';
 import {deleteDestination, reorderDestinations} from '@/services/reviewService';
 import {Navbar} from '@/components/navigation/Navbar';
-import {Pill} from '@/components/Pill';
 import {SecondaryButton} from '@/components/SecondaryButton';
 import {type CategoryType, type DayData, TripStepCard} from '@/components/TripStepCard';
 import {PrimaryButton} from '@/components/PrimaryButton';
 import {TripBudgetCard} from '@/components/trip/TripBudgetCard';
 import {PracticalCard} from '@/components/PracticalCard';
 import {TransportCard} from '@/components/TransportCard';
+import {TripDayChip} from '@/components/TripDayChip';
+import {DayDetailView} from '@/components/trip/DayDetailView';
 import Icon from "react-native-remix-icon";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -139,6 +140,7 @@ const SEASON_EMOJI: Record<string, string> = {
 };
 
 type Tab = 'itinerary' | 'budget' | 'practical' | 'logistics';
+type ViewMode = 'overview' | 'daily';
 
 // Helper function to map spot_type to CategoryType
 function mapSpotTypeToCategory(spotType: string | null): CategoryType {
@@ -151,6 +153,37 @@ function mapSpotTypeToCategory(spotType: string | null): CategoryType {
   if (['park', 'garden', 'nature', 'hike', 'mountain', 'forest', 'trail'].some(t => type.includes(t))) return 'nature';
   if (['beach', 'sea', 'ocean', 'coast', 'island'].some(t => type.includes(t))) return 'beach';
   return 'other';
+}
+
+// Helper function to map spot_type to HighlightCategory for CityMap
+function mapSpotTypeToHighlightCategory(spotType: string | null): HighlightCategory {
+  if (!spotType) return 'other';
+  const type = spotType.toLowerCase();
+  if (['restaurant', 'cafe', 'bar', 'food', 'bakery', 'coffee'].some(t => type.includes(t))) return 'food';
+  if (['museum', 'attraction', 'monument', 'temple', 'church', 'historic', 'cultural'].some(t => type.includes(t))) return 'culture';
+  if (['nightlife', 'club', 'disco', 'party'].some(t => type.includes(t))) return 'nightlife';
+  if (['shopping', 'market', 'mall', 'store', 'shop'].some(t => type.includes(t))) return 'shopping';
+  if (['park', 'garden', 'nature', 'hike', 'mountain', 'forest', 'trail', 'beach', 'sea', 'ocean', 'coast', 'island'].some(t => type.includes(t))) return 'nature';
+  return 'other';
+}
+
+// Convert DbSpot to Highlight for CityMap
+function spotToHighlight(spot: DbSpot): Highlight {
+  return {
+    id: spot.id,
+    name: spot.name,
+    category: mapSpotTypeToHighlightCategory(spot.spot_type),
+    subtype: spot.spot_type || undefined,
+    address: spot.address || undefined,
+    description: spot.tips || undefined,
+    price_range: spot.price_range || undefined,
+    tips: spot.tips || undefined,
+    is_must_see: spot.highlight,
+    latitude: spot.latitude || undefined,
+    longitude: spot.longitude || undefined,
+    highlight_order: spot.spot_order,
+    validated: spot.verified,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -172,6 +205,8 @@ export default function TripDetailPage() {
   const [trip, setTrip] = useState<FullTrip | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('itinerary');
+  const [viewMode, setViewMode] = useState<ViewMode>('overview');
+  const [selectedDayNumber, setSelectedDayNumber] = useState<number | null>(null);
   const [showAddCityModal, setShowAddCityModal] = useState(false);
   const [savedCitiesMap, setSavedCitiesMap] = useState<SavedCityMap>({});
   const [isEditingOrder, setIsEditingOrder] = useState(false);
@@ -179,6 +214,7 @@ export default function TripDetailPage() {
   const [isSavingOrder, setIsSavingOrder] = useState(false);
   const [isMapExpanded, setIsMapExpanded] = useState(false);
   const [highlightedCity, setHighlightedCity] = useState<string | null>(null);
+  const [highlightedSpotId, setHighlightedSpotId] = useState<string | null>(null);
 
   const SCREEN_HEIGHT = Dimensions.get('window').height;
   const MAP_DEFAULT_HEIGHT = 300;
@@ -213,31 +249,12 @@ export default function TripDetailPage() {
   const [headerHeight, setHeaderHeight] = useState(620);
   const headerMeasured = useRef(false);
 
-  const COLLAPSIBLE_HEIGHT = 90;
-  const COLLAPSE_RANGE = 90;
+  const COLLAPSE_RANGE = 60;
 
-  const vibeAndStatsOpacity = scrollY.interpolate({
-    inputRange: [0, COLLAPSE_RANGE / 2],
-    outputRange: [1, 0],
-    extrapolate: 'clamp',
-  });
-
-  const vibeAndStatsTranslateY = scrollY.interpolate({
-    inputRange: [0, COLLAPSE_RANGE],
-    outputRange: [0, -15],
-    extrapolate: 'clamp',
-  });
-
-  const vibeAndStatsHeight = scrollY.interpolate({
-    inputRange: [0, COLLAPSE_RANGE],
-    outputRange: [COLLAPSIBLE_HEIGHT, 0],
-    extrapolate: 'clamp',
-  });
-
-  // Le top du ScrollView suit la réduction du header (collapse de COLLAPSIBLE_HEIGHT px)
+  // Le top du ScrollView suit la réduction du header
   const scrollContainerTop = scrollY.interpolate({
     inputRange: [0, COLLAPSE_RANGE],
-    outputRange: [headerHeight, headerHeight - COLLAPSIBLE_HEIGHT],
+    outputRange: [headerHeight, headerHeight - COLLAPSE_RANGE],
     extrapolate: 'clamp',
   });
 
@@ -301,6 +318,26 @@ export default function TripDetailPage() {
     const seasonEmoji = trip.best_season ? (SEASON_EMOJI[trip.best_season.toLowerCase()] ?? '🌍') : null;
     return { destinations, days, logistics, budget, practical, totalSpots, highlights, destLabel, seasonEmoji };
   }, [trip]);
+
+  // Selected day data for daily mode CityMap
+  const selectedDay = useMemo(() => {
+    if (!derived?.days || !selectedDayNumber) return null;
+    return derived.days.find(d => d.day_number === selectedDayNumber) || null;
+  }, [derived?.days, selectedDayNumber]);
+
+  const selectedDayHighlights = useMemo(() => {
+    if (!selectedDay?.spots) return [];
+    return selectedDay.spots.map(spotToHighlight);
+  }, [selectedDay?.spots]);
+
+  const selectedDayCenter = useMemo(() => {
+    if (!selectedDay?.spots) return { lat: 48.8566, lon: 2.3522 }; // Default Paris
+    const spotsWithCoords = selectedDay.spots.filter(s => s.latitude && s.longitude);
+    if (spotsWithCoords.length === 0) return { lat: 48.8566, lon: 2.3522 };
+    const avgLat = spotsWithCoords.reduce((sum, s) => sum + (s.latitude || 0), 0) / spotsWithCoords.length;
+    const avgLon = spotsWithCoords.reduce((sum, s) => sum + (s.longitude || 0), 0) / spotsWithCoords.length;
+    return { lat: avgLat, lon: avgLon };
+  }, [selectedDay?.spots]);
 
   const enterEditMode = useCallback(() => {
     if (!derived?.destinations) return;
@@ -379,7 +416,7 @@ export default function TripDetailPage() {
     );
   }
 
-  const { destinations, days, logistics, budget, practical, totalSpots } = derived;
+  const { destinations, days, logistics, budget, practical } = derived;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -432,8 +469,19 @@ export default function TripDetailPage() {
 
             {/* HERO MAP — animated height expand/collapse */}
             <Animated.View style={{ width: '100%', height: mapExpandAnim }}>
-              {/* Map - single instance */}
-              {destinations.length > 0 ? (
+              {/* Map - TripMap for overview, CityMap for daily mode */}
+              {viewMode === 'daily' && selectedDay && selectedDayHighlights.length > 0 ? (
+                <CityMap
+                  highlights={selectedDayHighlights}
+                  cityName={selectedDay.location || ''}
+                  cityLat={selectedDayCenter.lat}
+                  cityLon={selectedDayCenter.lon}
+                  selectedCategories={[]}
+                  highlightedId={highlightedSpotId}
+                  onMarkerPress={(id) => setHighlightedSpotId(prev => prev === id ? null : id)}
+                  hideApproximateBadge
+                />
+              ) : destinations.length > 0 ? (
                 <TripMap
                   destinations={destinations}
                   highlightedCity={highlightedCity}
@@ -487,7 +535,7 @@ export default function TripDetailPage() {
               </Animated.View>
 
               {/* Expand/collapse button */}
-              {destinations.length > 0 && (
+              {(destinations.length > 0 || (viewMode === 'daily' && selectedDayHighlights.length > 0)) && (
                 <TouchableOpacity
                   onPress={toggleMapExpanded}
                   style={{
@@ -511,28 +559,51 @@ export default function TripDetailPage() {
                 </TouchableOpacity>
               )}
 
-              {/* Highlighted city pill — visible when expanded */}
-              {isMapExpanded && highlightedCity && (
-                <View style={{
-                  position: 'absolute',
-                  bottom: 24,
-                  alignSelf: 'center',
-                  left: 0, right: 0,
-                  alignItems: 'center',
-                }}>
+              {/* Highlighted city/spot pill — visible when expanded */}
+              {isMapExpanded && (
+                (viewMode === 'daily' && highlightedSpotId) ? (
                   <View style={{
-                    backgroundColor: 'rgba(53, 41, 193, 0.85)',
-                    borderWidth: 1,
-                    borderColor: 'rgba(255,255,255,0.2)',
-                    borderRadius: 20,
-                    paddingHorizontal: 16,
-                    paddingVertical: 8,
+                    position: 'absolute',
+                    bottom: 24,
+                    alignSelf: 'center',
+                    left: 0, right: 0,
+                    alignItems: 'center',
                   }}>
-                    <Text style={{ fontFamily: 'Righteous', fontSize: 14, color: '#fff' }}>
-                      📍 {highlightedCity}
-                    </Text>
+                    <View style={{
+                      backgroundColor: 'rgba(53, 41, 193, 0.85)',
+                      borderWidth: 1,
+                      borderColor: 'rgba(255,255,255,0.2)',
+                      borderRadius: 20,
+                      paddingHorizontal: 16,
+                      paddingVertical: 8,
+                    }}>
+                      <Text style={{ fontFamily: 'Righteous', fontSize: 14, color: '#fff' }}>
+                        📍 {selectedDay?.spots?.find(s => s.id === highlightedSpotId)?.name || ''}
+                      </Text>
+                    </View>
                   </View>
-                </View>
+                ) : highlightedCity ? (
+                  <View style={{
+                    position: 'absolute',
+                    bottom: 24,
+                    alignSelf: 'center',
+                    left: 0, right: 0,
+                    alignItems: 'center',
+                  }}>
+                    <View style={{
+                      backgroundColor: 'rgba(53, 41, 193, 0.85)',
+                      borderWidth: 1,
+                      borderColor: 'rgba(255,255,255,0.2)',
+                      borderRadius: 20,
+                      paddingHorizontal: 16,
+                      paddingVertical: 8,
+                    }}>
+                      <Text style={{ fontFamily: 'Righteous', fontSize: 14, color: '#fff' }}>
+                        📍 {highlightedCity}
+                      </Text>
+                    </View>
+                  </View>
+                ) : null
               )}
             </Animated.View>
 
@@ -546,41 +617,43 @@ export default function TripDetailPage() {
               </Text>
             </View>
 
-            {/* VIBE + STATS — height sur JS thread, opacity+transform sur native thread */}
-            <Animated.View style={{ height: vibeAndStatsHeight, overflow: 'hidden' }}>
-              <Animated.View style={{
-                opacity: vibeAndStatsOpacity,
-                transform: [{ translateY: vibeAndStatsTranslateY }],
-              }}>
-                {trip.vibe && (
-                  <View className="px-8 mt-4 flex-row">
-                    <Pill
-                      label={`${trip.vibe}`}
-                      backgroundColor="#656E57"
-                      textColor="rgba(250, 250, 255, 0.9)"
-                    />
-                  </View>
-                )}
-                <View className="px-8 mt-3">
-                  <View style={{
-                    flexDirection: 'row',
-                    backgroundColor: 'rgba(30, 26, 100, 0.55)',
-                    borderRadius: 14,
-                    borderWidth: 1,
-                    borderColor: '#656E57',
-                  }}>
-                    <StatCell value={`${trip.duration_days}j`} label={t('tripDetail.duration')} />
-                    <View style={{ width: 1, backgroundColor: 'rgba(255,255,255,0.08)', marginHorizontal: 8 }} />
-                    <StatCell value={String(destinations.length)} label={destinations.length > 1 ? t('tripDetail.cities') : t('tripDetail.city')} />
-                    <View style={{ width: 1, backgroundColor: 'rgba(255,255,255,0.08)', marginHorizontal: 8 }} />
-                    <StatCell value={String(totalSpots)} label={t('tripDetail.places')} />
-                  </View>
+            {/* VIEW MODE SWITCHER — Overview / Daily */}
+            <View className="px-8 mt-3">
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <PrimaryButton
+                    title={t('tripDetail.overview')}
+                    color={viewMode === 'overview' ? 'blue' : 'accent'}
+                    size="sm"
+                    fullWidth
+                    onPress={() => {
+                      setViewMode('overview');
+                      setSelectedDayNumber(null);
+                    }}
+                    style={{ opacity: viewMode === 'overview' ? 1 : 0.6 }}
+                  />
                 </View>
-              </Animated.View>
-            </Animated.View>
+                <View style={{ flex: 1 }}>
+                  <PrimaryButton
+                    title={t('tripDetail.daily')}
+                    color={viewMode === 'daily' ? 'blue' : 'accent'}
+                    size="sm"
+                    fullWidth
+                    onPress={() => {
+                      setViewMode('daily');
+                      // Select first day by default when switching to daily view
+                      if (days.length > 0 && !selectedDayNumber) {
+                        setSelectedDayNumber(days[0].day_number);
+                      }
+                    }}
+                    style={{ opacity: viewMode === 'daily' ? 1 : 0.6 }}
+                  />
+                </View>
+              </View>
+            </View>
 
             {/* NAVBAR */}
-            <View className="px-4 mt-8">
+            <View className="px-4 mt-6">
               <Navbar
                 variant="secondary"
                 size="sm"
@@ -617,172 +690,222 @@ export default function TripDetailPage() {
               {/* ─────────────────── ITINERARY ─────────────────── */}
               {activeTab === 'itinerary' && (
                 <View className="pb-6 px-4 pt-4" style={{minHeight: SCREEN_HEIGHT - headerHeight + COLLAPSE_RANGE}}>
-                  {/* Section header: ETAPES DU VOYAGE + Reorder button */}
-                  <View className="flex-row items-center justify-between mb-4">
-                    <Text style={{
-                      fontFamily: 'DM Sans',
-                      fontWeight: '600',
-                      fontSize: 12,
-                      color: 'rgba(255, 255, 255, 0.5)',
-                      letterSpacing: 1,
-                    }}>
-                      {t('tripDetail.tripSteps').toUpperCase()}
-                    </Text>
-                    {!isEditingOrder ? (
-                      <SecondaryButton
-                        title={t('tripDetail.reorder')}
-                        variant="square"
-                        size="sm"
-                        leftIcon="draggable"
-                        onPress={enterEditMode}
-                      />
-                    ) : (
-                      <View className="row-center">
-                        <SecondaryButton title={t('tripDetail.cancel')} variant="square" size="sm" onPress={cancelEditMode} />
-                        <SecondaryButton
-                          title={t('tripDetail.ok')}
-                          leftIcon="check-line"
-                          variant="square"
+
+                  {/* ═══════════════════ OVERVIEW MODE ═══════════════════ */}
+                  {viewMode === 'overview' && (
+                    <>
+                      {/* Section header: ETAPES DU VOYAGE + Reorder button */}
+                      <View className="flex-row items-center justify-between mb-4">
+                        <Text style={{
+                          fontFamily: 'DM Sans',
+                          fontWeight: '600',
+                          fontSize: 12,
+                          color: 'rgba(255, 255, 255, 0.5)',
+                          letterSpacing: 1,
+                        }}>
+                          {t('tripDetail.tripSteps').toUpperCase()}
+                        </Text>
+                        {!isEditingOrder ? (
+                          <SecondaryButton
+                            title={t('tripDetail.reorder')}
+                            variant="square"
+                            size="sm"
+                            leftIcon="draggable"
+                            onPress={enterEditMode}
+                          />
+                        ) : (
+                          <View className="row-center">
+                            <SecondaryButton title={t('tripDetail.cancel')} variant="square" size="sm" onPress={cancelEditMode} />
+                            <SecondaryButton
+                              title={t('tripDetail.ok')}
+                              leftIcon="check-line"
+                              variant="square"
+                              size="sm"
+                              active={true}
+                              onPress={confirmOrder}
+                              disabled={isSavingOrder}
+                            />
+                          </View>
+                        )}
+                      </View>
+
+                      {/* Mode normal - TripStepCards */}
+                      {!isEditingOrder && (
+                        <View style={{ gap: 12 }}>
+                          {destinations.map((dest, i) => {
+                            const destinationDays = days.filter(
+                              (day) => day.location?.toLowerCase().includes(dest.city?.toLowerCase() || '')
+                            );
+                            const spotsCount = destinationDays.reduce((acc, day) => acc + (day.spots?.length || 0), 0);
+                            const dayDataArray: DayData[] = destinationDays.map((day) => {
+                              const categoryMap: Record<string, number> = {};
+                              day.spots?.forEach((spot) => {
+                                const category = mapSpotTypeToCategory(spot.spot_type);
+                                categoryMap[category] = (categoryMap[category] || 0) + 1;
+                              });
+                              const categories = Object.entries(categoryMap).map(([cat, count]) => ({
+                                category: cat as CategoryType,
+                                count,
+                              }));
+                              return {
+                                dayNumber: day.day_number,
+                                spotName: day.theme || day.location || t('tripDetail.day', { number: day.day_number }),
+                                duration: t('tripDetail.spots', { count: day.spots?.length || 0 }),
+                                categories,
+                              };
+                            });
+                            const savedCityId = getSavedCityId(dest.city);
+                            return (
+                              <TripStepCard
+                                key={dest.id}
+                                stepNumber={i + 1}
+                                cityName={dest.city || 'Destination'}
+                                daysCount={dest.days_spent || destinationDays.length || 1}
+                                spotsCount={spotsCount}
+                                days={dayDataArray}
+                                isHighlighted={highlightedCity?.toLowerCase() === dest.city?.toLowerCase()}
+                                onExpand={(city) => setHighlightedCity(city)}
+                                onViewDetails={
+                                  savedCityId ? () => router.push(`/(tabs)/trips/city/${savedCityId}`) : undefined
+                                }
+                              />
+                            );
+                          })}
+                        </View>
+                      )}
+
+                      {/* Mode édition - DraggableFlatList (scrollDisabled, scroll handled by outer ScrollView) */}
+                      {isEditingOrder && (
+                        <DraggableFlatList
+                          data={pendingDestinations}
+                          keyExtractor={(item) => item.id}
+                          onDragEnd={({ data }) => setPendingDestinations(data)}
+                          scrollEnabled={false}
+                          renderItem={({ item: dest, drag, isActive, getIndex }: RenderItemParams<Destination>) => {
+                            const i = getIndex() ?? 0;
+                            return (
+                              <ScaleDecorator activeScale={0.95}>
+                                <TouchableOpacity
+                                  activeOpacity={0.7}
+                                  onLongPress={drag}
+                                  delayLongPress={100}
+                                  disabled={isActive}
+                                  style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    backgroundColor: isActive ? 'rgba(30, 26, 100, 0.8)' : 'rgba(30, 26, 100, 0.55)',
+                                    borderRadius: 12,
+                                    borderWidth: 1,
+                                    borderColor: isActive ? 'rgba(82, 72, 212, 0.5)' : 'rgba(255, 255, 255, 0.09)',
+                                    paddingVertical: 12,
+                                    paddingHorizontal: 14,
+                                    marginBottom: 8,
+                                  }}
+                                >
+                                  <View style={{
+                                    width: 24, height: 24, borderRadius: 12,
+                                    backgroundColor: '#3529C1',
+                                    alignItems: 'center', justifyContent: 'center', marginRight: 10,
+                                  }}>
+                                    <Text style={{ fontFamily: 'Righteous', fontSize: 11, color: '#fff' }}>{i + 1}</Text>
+                                  </View>
+                                  <View style={{ flex: 1 }}>
+                                    <Text style={{ fontFamily: 'Righteous', fontSize: 14, color: '#fff' }}>
+                                      {dest.city || t('tripDetail.destination')}
+                                    </Text>
+                                    {dest.days_spent && (
+                                      <Text style={{ fontFamily: 'DMSans', fontSize: 11, color: 'rgba(255,255,255,0.45)', marginTop: 2 }}>
+                                        {dest.days_spent} {dest.days_spent > 1 ? t('tripDetail.days_plural') : t('tripDetail.day_plural')}
+                                      </Text>
+                                    )}
+                                  </View>
+                                  <TouchableOpacity
+                                    onPress={() => {
+                                      Alert.alert(
+                                        t('tripDetail.deleteCity'),
+                                        t('tripDetail.cityWillBeDeleted', { city: dest.city }),
+                                        [
+                                          { text: t('tripDetail.cancel'), style: 'cancel' },
+                                          {
+                                            text: t('tripDetail.delete'),
+                                            style: 'destructive',
+                                            onPress: () => setPendingDestinations(prev => prev.filter(d => d.id !== dest.id)),
+                                          },
+                                        ]
+                                      );
+                                    }}
+                                    style={{ padding: 8 }}
+                                  >
+                                    <Icon name={"delete-bin-2-line"} size={16} color="#f87171" />
+                                  </TouchableOpacity>
+                                  <View style={{ padding: 8 }}>
+                                    <Icon name={"draggable"} size={18} color={isActive ? '#5248D4' : 'rgba(255,255,255,0.45)'} />
+                                  </View>
+                                </TouchableOpacity>
+                              </ScaleDecorator>
+                            );
+                          }}
+                        />
+                      )}
+
+                      {/* Add city button */}
+                      <View style={{ marginTop: 16 }}>
+                        <PrimaryButton
+                          title={t('tripDetail.addCity')}
+                          leftIcon="add-line"
+                          color="purple"
                           size="sm"
-                          active={true}
-                          onPress={confirmOrder}
-                          disabled={isSavingOrder}
+                          fullWidth
+                          onPress={() => setShowAddCityModal(true)}
+                          style={{ opacity: 0.8 }}
                         />
                       </View>
-                    )}
-                  </View>
+                    </>
+                  )}
 
-                  {/* Mode normal - TripStepCards */}
-                  {!isEditingOrder && (
-                    <View style={{ gap: 12 }}>
-                      {destinations.map((dest, i) => {
-                        const destinationDays = days.filter(
-                          (day) => day.location?.toLowerCase().includes(dest.city?.toLowerCase() || '')
-                        );
-                        const spotsCount = destinationDays.reduce((acc, day) => acc + (day.spots?.length || 0), 0);
-                        const dayDataArray: DayData[] = destinationDays.map((day) => {
-                          const categoryMap: Record<string, number> = {};
-                          day.spots?.forEach((spot) => {
-                            const category = mapSpotTypeToCategory(spot.spot_type);
-                            categoryMap[category] = (categoryMap[category] || 0) + 1;
-                          });
-                          const categories = Object.entries(categoryMap).map(([cat, count]) => ({
-                            category: cat as CategoryType,
-                            count,
-                          }));
-                          return {
-                            dayNumber: day.day_number,
-                            spotName: day.theme || day.location || t('tripDetail.day', { number: day.day_number }),
-                            duration: t('tripDetail.spots', { count: day.spots?.length || 0 }),
-                            categories,
-                          };
-                        });
-                        const savedCityId = getSavedCityId(dest.city);
-                        return (
-                          <TripStepCard
-                            key={dest.id}
-                            stepNumber={i + 1}
-                            cityName={dest.city || 'Destination'}
-                            daysCount={dest.days_spent || destinationDays.length || 1}
-                            spotsCount={spotsCount}
-                            days={dayDataArray}
-                            isHighlighted={highlightedCity?.toLowerCase() === dest.city?.toLowerCase()}
-                            onExpand={(city) => setHighlightedCity(city)}
-                            onViewDetails={
-                              savedCityId ? () => router.push(`/(tabs)/trips/city/${savedCityId}`) : undefined
-                            }
+                  {/* ═══════════════════ DAILY MODE ═══════════════════ */}
+                  {viewMode === 'daily' && (
+                    <>
+                      {/* Day selector chips */}
+                      {days.length > 0 && (
+                        <ScrollView
+                          horizontal
+                          showsHorizontalScrollIndicator={false}
+                          contentContainerStyle={{ gap: 8, paddingBottom: 16 }}
+                          style={{ marginHorizontal: -16, paddingHorizontal: 16 }}
+                        >
+                          {days.map((day) => (
+                            <TripDayChip
+                              key={day.id}
+                              variant="selector"
+                              dayNumber={day.day_number}
+                              count={day.spots?.length || 0}
+                              isSelected={selectedDayNumber === day.day_number}
+                              onPress={() => setSelectedDayNumber(day.day_number)}
+                            />
+                          ))}
+                        </ScrollView>
+                      )}
+
+                      {/* Day content */}
+                      {selectedDayNumber && (() => {
+                        const selectedDay = days.find(d => d.day_number === selectedDayNumber);
+                        return selectedDay ? (
+                          <DayDetailView
+                            day={selectedDay}
+                            onRefresh={loadTrip}
+                            highlightedSpotId={highlightedSpotId}
+                            onHighlightChange={setHighlightedSpotId}
                           />
+                        ) : (
+                          <View className="empty-state" style={{ paddingVertical: 40 }}>
+                            <Icon name="calendar-line" size={32} color="#52525b" style={{ opacity: 0.4 }} />
+                            <Text className="text-sm text-zinc-500 mt-2 font-dmsans">{t('tripDetail.selectDay')}</Text>
+                          </View>
                         );
-                      })}
-                    </View>
+                      })()}
+                    </>
                   )}
-
-                  {/* Mode édition - DraggableFlatList (scrollDisabled, scroll handled by outer ScrollView) */}
-                  {isEditingOrder && (
-                    <DraggableFlatList
-                      data={pendingDestinations}
-                      keyExtractor={(item) => item.id}
-                      onDragEnd={({ data }) => setPendingDestinations(data)}
-                      scrollEnabled={false}
-                      renderItem={({ item: dest, drag, isActive, getIndex }: RenderItemParams<Destination>) => {
-                        const i = getIndex() ?? 0;
-                        return (
-                          <ScaleDecorator activeScale={0.95}>
-                            <TouchableOpacity
-                              activeOpacity={0.7}
-                              onLongPress={drag}
-                              delayLongPress={100}
-                              disabled={isActive}
-                              style={{
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                backgroundColor: isActive ? 'rgba(30, 26, 100, 0.8)' : 'rgba(30, 26, 100, 0.55)',
-                                borderRadius: 12,
-                                borderWidth: 1,
-                                borderColor: isActive ? 'rgba(82, 72, 212, 0.5)' : 'rgba(255, 255, 255, 0.09)',
-                                paddingVertical: 12,
-                                paddingHorizontal: 14,
-                                marginBottom: 8,
-                              }}
-                            >
-                              <View style={{
-                                width: 24, height: 24, borderRadius: 12,
-                                backgroundColor: '#3529C1',
-                                alignItems: 'center', justifyContent: 'center', marginRight: 10,
-                              }}>
-                                <Text style={{ fontFamily: 'Righteous', fontSize: 11, color: '#fff' }}>{i + 1}</Text>
-                              </View>
-                              <View style={{ flex: 1 }}>
-                                <Text style={{ fontFamily: 'Righteous', fontSize: 14, color: '#fff' }}>
-                                  {dest.city || t('tripDetail.destination')}
-                                </Text>
-                                {dest.days_spent && (
-                                  <Text style={{ fontFamily: 'DMSans', fontSize: 11, color: 'rgba(255,255,255,0.45)', marginTop: 2 }}>
-                                    {dest.days_spent} {dest.days_spent > 1 ? t('tripDetail.days_plural') : t('tripDetail.day_plural')}
-                                  </Text>
-                                )}
-                              </View>
-                              <TouchableOpacity
-                                onPress={() => {
-                                  Alert.alert(
-                                    t('tripDetail.deleteCity'),
-                                    t('tripDetail.cityWillBeDeleted', { city: dest.city }),
-                                    [
-                                      { text: t('tripDetail.cancel'), style: 'cancel' },
-                                      {
-                                        text: t('tripDetail.delete'),
-                                        style: 'destructive',
-                                        onPress: () => setPendingDestinations(prev => prev.filter(d => d.id !== dest.id)),
-                                      },
-                                    ]
-                                  );
-                                }}
-                                style={{ padding: 8 }}
-                              >
-                                <Icon name={"delete-bin-2-line"} size={16} color="#f87171" />
-                              </TouchableOpacity>
-                              <View style={{ padding: 8 }}>
-                                <Icon name={"draggable"} size={18} color={isActive ? '#5248D4' : 'rgba(255,255,255,0.45)'} />
-                              </View>
-                            </TouchableOpacity>
-                          </ScaleDecorator>
-                        );
-                      }}
-                    />
-                  )}
-
-                  {/* Add city button */}
-                  <View style={{ marginTop: 16 }}>
-                    <PrimaryButton
-                      title={t('tripDetail.addCity')}
-                      leftIcon="add-line"
-                      color="purple"
-                      size="sm"
-                      fullWidth
-                      onPress={() => setShowAddCityModal(true)}
-                      style={{ opacity: 0.8 }}
-                    />
-                  </View>
                 </View>
               )}
 
@@ -848,17 +971,6 @@ export default function TripDetailPage() {
 // Sub-components
 // ─────────────────────────────────────────────────────────────────────────────
 
-function StatCell({value, label }: {
-  value: string; label: string;
-}) {
-  return (
-    <View className="flex-1 items-center gap-0.5 py-2">
-      <Text className="text-base font-bold text-white/80 font-righteous">{value}</Text>
-      <Text className="text-[10px] text-white/60 font-dmsans">{label}</Text>
-    </View>
-  );
-}
-
 function EmptyState({ message }: { message: string }) {
   return (
     <View className="empty-state">
@@ -867,3 +979,4 @@ function EmptyState({ message }: { message: string }) {
     </View>
   );
 }
+

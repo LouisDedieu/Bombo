@@ -373,7 +373,14 @@
     "delete": "Supprimer",
     "addCity": "Ajouter une ville",
     "noBudgetInfo": "Aucune information budget disponible.",
-    "noPracticalInfo": "Aucune info pratique disponible."
+    "noPracticalInfo": "Aucune info pratique disponible.",
+    "overview": "Vue d'ensemble",
+    "daily": "Jour par jour",
+    "selectDay": "Sélectionnez un jour",
+    "noSpotsForDay": "Aucun spot pour ce jour",
+    "noLocationForSpot": "Aucune localisation pour ce spot",
+    "noDescription": "Pas de description disponible",
+    "meals": "Repas"
   },
   "cityDetail": {
     "cityNotFound": "Ville introuvable.",

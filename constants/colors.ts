@@ -32,6 +32,11 @@ export const colors = {
 
   // ── Shadows ──────────────────────────────────────────────────────────────
   shadowDark: 'rgba(0, 0, 0, 0.25)',
+
+  // ── Chips ───────────────────────────────────────────────────────────────
+  chipBg: '#49447D',
+  chipBadgeBg: '#292461',
+  chipBadgeText: '#8E6DE8',
 } as const;
 
 export type ColorKey = keyof typeof colors;

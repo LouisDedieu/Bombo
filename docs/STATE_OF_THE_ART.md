@@ -681,3 +681,85 @@ Variables d'environnement (`.env` frontend) :
 
 Variables d'environnement (`.env` backend) :
 - `LOCATIONIQ_API_KEY` - Clé API LocationIQ (sécurisée côté serveur)
+
+---
+
+## 8. Gestion des Erreurs (Backend → Frontend)
+
+### Architecture
+
+Le backend utilise un système centralisé de codes d'erreur défini dans `models/errors.py`. Chaque erreur retourne un format JSON standardisé que le frontend peut interpréter.
+
+### Codes d'erreur disponibles (`ErrorCode` enum)
+
+| Code | Message par défaut | Cas d'usage |
+|------|-------------------|-------------|
+| **Analyse / Job** | | |
+| `UNSUPPORTED_URL` | "Cette URL n'est pas supportée..." | URL non TikTok/Instagram/YouTube |
+| `PRIVATE_VIDEO` | "La vidéo est privée ou n'est plus disponible" | Vidéo inaccessible |
+| `IP_BLOCKED` | "Accès temporairement bloqué, réessayez plus tard" | Rate limiting externe |
+| `DOWNLOAD_ERROR` | "Impossible de télécharger la vidéo" | Échec téléchargement |
+| `INFERENCE_ERROR` | "Erreur lors de l'analyse de la vidéo" | Échec IA |
+| `MODEL_NOT_LOADED` | "Le modèle n'est pas encore chargé" | Service IA non prêt |
+| `SERVICE_UNAVAILABLE` | "Le service n'est pas disponible" | Supabase/service down |
+| **Ressources** | | |
+| `TRIP_NOT_FOUND` | "Voyage introuvable" | Trip inexistant ou non autorisé |
+| `CITY_NOT_FOUND` | "Ville introuvable" | City inexistante ou non autorisée |
+| `JOB_NOT_FOUND` | "Job introuvable" | Job d'analyse inexistant |
+| `DAY_NOT_FOUND` | "Jour introuvable" | Itinerary day inexistant |
+| `SPOT_NOT_FOUND` | "Spot introuvable" | Spot inexistant ou non autorisé |
+| `HIGHLIGHT_NOT_FOUND` | "Highlight introuvable" | Highlight inexistant |
+| `DESTINATION_NOT_FOUND` | "Destination introuvable" | Destination inexistante |
+| **Auth / Permissions** | | |
+| `ACCESS_DENIED` | "Accès refusé" | Ressource non autorisée |
+| `NOT_AUTHENTICATED` | "Non authentifié" | Token manquant |
+| `INVALID_TOKEN` | "Token invalide" | Token expiré/corrompu |
+| **Validation** | | |
+| `INVALID_REQUEST` | "Requête invalide" | Payload malformé |
+| `MISSING_FIELD` | "Champ manquant" | Champ requis absent |
+| `UNKNOWN_ERROR` | "Une erreur inattendue s'est produite" | Fallback |
+
+### Format de réponse d'erreur
+
+```json
+{
+  "detail": {
+    "error_code": "TRIP_NOT_FOUND",
+    "message": "Voyage introuvable"
+  }
+}
+```
+
+### Utilisation Backend
+
+```python
+from models.errors import ErrorCode, get_error_message
+
+# Dans un endpoint ou une fonction helper
+raise HTTPException(404, detail={
+    "error_code": ErrorCode.TRIP_NOT_FOUND,
+    "message": get_error_message(ErrorCode.TRIP_NOT_FOUND),
+})
+```
+
+### Utilisation Frontend
+
+```typescript
+// services/tripService.ts
+try {
+  const response = await apiFetch(`/trips/${tripId}`);
+  return response;
+} catch (error) {
+  if (error.detail?.error_code === 'TRIP_NOT_FOUND') {
+    // Gérer spécifiquement ce cas
+  }
+  throw error;
+}
+```
+
+### Bonnes pratiques
+
+1. **Toujours utiliser les codes d'erreur** - Ne jamais hardcoder les messages d'erreur
+2. **Messages en français** - Les messages par défaut sont en français pour l'UX
+3. **Erreurs descriptives** - Utiliser le code le plus spécifique possible
+4. **Ownership checks** - Toutes les fonctions `_check_*_ownership` utilisent ce système
