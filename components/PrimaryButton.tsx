@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   Pressable,
   Text,
@@ -8,9 +8,20 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  Easing,
+} from 'react-native-reanimated';
 import { cn } from '@/components/ui/utils';
 import Icon from 'react-native-remix-icon';
 import Loader from '@/components/Loader';
+
+const ANIMATION_CONFIG = {
+  duration: 200,
+  easing: Easing.bezier(0.4, 0, 0.2, 1),
+};
 
 // ---------------------------------------------------------------------------
 // Color Presets - Each has stroke gradient + fill gradient
@@ -57,6 +68,14 @@ const colorPresets = {
     shadow: 'rgba(92, 107, 61, 0.64)',
     dropShadow: 'rgba(61, 74, 45, 0.2)',
   },
+  // Inactive/muted variant (used when active=false)
+  inactive: {
+    stroke: ['#4a4a5c', '#2a2a3c', '#3a3a4c'] as const,
+    fill: ['#3a3a4c', '#2a2a3c'] as const,
+    fillAngle: 124.86,
+    shadow: 'rgba(40, 40, 60, 0.64)',
+    dropShadow: 'rgba(0,0,0,0.1)',
+  },
 } as const;
 
 type ColorPreset = keyof typeof colorPresets;
@@ -84,6 +103,8 @@ export interface PrimaryButtonProps extends Omit<PressableProps, 'style' | 'chil
   fullWidth?: boolean;
   /** Loading state */
   loading?: boolean;
+  /** Active state - when false, shows muted/inactive style */
+  active?: boolean;
   /** Extra class names */
   className?: string;
   /** Container style */
@@ -104,14 +125,37 @@ export function PrimaryButton({
   size = 'default',
   fullWidth = false,
   loading = false,
+  active = true,
   disabled = false,
   className,
   style,
   ...props
 }: PrimaryButtonProps) {
   const isDisabled = disabled || loading;
-  const preset = colorPresets[color];
+  const activePreset = colorPresets[color];
+  const inactivePreset = colorPresets.inactive;
   const isIconOnly = (size === 'icon' || size === 'iconSm') && !title && !children;
+
+  // Animation for active state
+  const activeProgress = useSharedValue(active ? 1 : 0);
+
+  useEffect(() => {
+    activeProgress.value = withTiming(active ? 1 : 0, ANIMATION_CONFIG);
+  }, [active]);
+
+  // Animated styles for active/inactive gradients
+  const activeGradientStyle = useAnimatedStyle(() => ({
+    opacity: activeProgress.value,
+  }));
+
+  const inactiveGradientStyle = useAnimatedStyle(() => ({
+    opacity: 1 - activeProgress.value,
+  }));
+
+  // Animated style for text/icon opacity (less opaque when inactive)
+  const contentOpacityStyle = useAnimatedStyle(() => ({
+    opacity: 0.5 + (activeProgress.value * 0.5), // 0.5 when inactive, 1 when active
+  }));
 
   // Size configurations
   const sizeConfig = {
@@ -124,7 +168,7 @@ export function PrimaryButton({
   };
 
   const config = sizeConfig[size];
-  const iconOnlySize = size === 'icon' ? config.height : undefined;
+  const iconOnlySize = (size === 'icon' || size === 'iconSm') ? config.height : undefined;
 
   // Actual right icon (either provided or arrow)
   const actualRightIcon = rightIcon ?? (showArrow ? 'arrow-right-line' : undefined);
@@ -138,8 +182,8 @@ export function PrimaryButton({
           height: config.height,
           width: isIconOnly ? iconOnlySize : undefined,
           borderRadius: config.borderRadius,
-          // Drop shadow
-          shadowColor: preset.dropShadow,
+          // Drop shadow (uses active preset color)
+          shadowColor: activePreset.dropShadow,
           shadowOffset: { width: 3, height: 4 },
           shadowOpacity: 1,
           shadowRadius: 10,
@@ -160,55 +204,91 @@ export function PrimaryButton({
             transform: pressed ? [{ scale: 0.98 }] : [{ scale: 1 }],
           }}
         >
-          {/* Stroke gradient (outer layer) */}
-          <LinearGradient
-            colors={[...preset.stroke]}
-            start={{ x: 0.5, y: 0 }}
-            end={{ x: 0.5, y: 1 }}
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              borderRadius: config.borderRadius,
-            }}
-          />
+          {/* Inactive gradients (bottom layer) */}
+          <Animated.View style={[{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }, inactiveGradientStyle]}>
+            <LinearGradient
+              colors={[...inactivePreset.stroke]}
+              start={{ x: 0.5, y: 0 }}
+              end={{ x: 0.5, y: 1 }}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                borderRadius: config.borderRadius,
+              }}
+            />
+            <LinearGradient
+              colors={[...inactivePreset.fill]}
+              start={{ x: 0.45, y: -1 }}
+              end={{ x: 0.5, y: 1 }}
+              style={{
+                position: 'absolute',
+                top: config.strokeWidth,
+                left: config.strokeWidth,
+                right: config.strokeWidth,
+                bottom: config.strokeWidth,
+                borderRadius: config.borderRadius - 1,
+                shadowColor: inactivePreset.shadow,
+                shadowOffset: { width: -4, height: -4 },
+                shadowOpacity: 1,
+                shadowRadius: 12,
+              }}
+            />
+          </Animated.View>
 
-          {/* Fill gradient (inner layer - creates stroke effect) */}
-          <LinearGradient
-            colors={[...preset.fill]}
-            start={{ x: 0.45, y: -1 }}
-            end={{ x: 0.5, y:  1}}
-            style={{
-              position: 'absolute',
-              top: config.strokeWidth,
-              left: config.strokeWidth,
-              right: config.strokeWidth,
-              bottom: config.strokeWidth,
-              borderRadius: config.borderRadius - 1,
-              // Inner shadow simulation
-              shadowColor: preset.shadow,
-              shadowOffset: { width: -4, height: -4 },
-              shadowOpacity: 1,
-              shadowRadius: 12,
-            }}
-          />
+          {/* Active gradients (top layer) */}
+          <Animated.View style={[{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }, activeGradientStyle]}>
+            <LinearGradient
+              colors={[...activePreset.stroke]}
+              start={{ x: 0.5, y: 0 }}
+              end={{ x: 0.5, y: 1 }}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                borderRadius: config.borderRadius,
+              }}
+            />
+            <LinearGradient
+              colors={[...activePreset.fill]}
+              start={{ x: 0.45, y: -1 }}
+              end={{ x: 0.5, y: 1 }}
+              style={{
+                position: 'absolute',
+                top: config.strokeWidth,
+                left: config.strokeWidth,
+                right: config.strokeWidth,
+                bottom: config.strokeWidth,
+                borderRadius: config.borderRadius - 1,
+                shadowColor: activePreset.shadow,
+                shadowOffset: { width: -4, height: -4 },
+                shadowOpacity: 1,
+                shadowRadius: 12,
+              }}
+            />
+          </Animated.View>
 
           {/* Content */}
-          <View
-            style={{
-              flex: 1,
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'center',
-              paddingTop: config.padding.top,
-              paddingBottom: config.padding.bottom,
-              paddingLeft: config.padding.left,
-              paddingRight: config.padding.right,
-              gap: 10,
-              zIndex: 10,
-            }}
+          <Animated.View
+            style={[
+              {
+                flex: 1,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                paddingTop: config.padding.top,
+                paddingBottom: config.padding.bottom,
+                paddingLeft: config.padding.left,
+                paddingRight: config.padding.right,
+                gap: 10,
+                zIndex: 10,
+              },
+              contentOpacityStyle,
+            ]}
           >
             {loading ? (
               <Loader size={24} color="#FAFAFF" />
@@ -236,7 +316,7 @@ export function PrimaryButton({
                 )}
               </>
             )}
-          </View>
+          </Animated.View>
         </View>
       )}
     </Pressable>

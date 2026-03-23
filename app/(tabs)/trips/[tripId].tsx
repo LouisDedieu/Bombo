@@ -14,13 +14,14 @@ import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useFocusEffect, useLocalSearchParams, useRouter} from 'expo-router';
 import {useTranslation} from 'react-i18next';
 import {TripMap, CityMap} from '@/components/map';
-import {getTrip} from '@/services/tripService';
+import {getTrip, updateSpotCoordinates} from '@/services/tripService';
 import {getUserSavedCities} from '@/services/cityService';
 import {useAuth} from '@/context/AuthContext';
 import {Destination, Highlight, HighlightCategory} from '@/types/api';
 import {AddCityToTripModal} from '@/components/trip/AddCityToTripModal';
+import {DestinationFormModal} from '@/components/trip/DestinationFormModal';
 import type {DbDay as ReviewDbDay} from '@/services/reviewService';
-import {deleteDestination, reorderDestinations} from '@/services/reviewService';
+import {deleteDestination, reorderDestinations, updateDestination} from '@/services/reviewService';
 import {Navbar} from '@/components/navigation/Navbar';
 import {SecondaryButton} from '@/components/SecondaryButton';
 import {type CategoryType, type DayData, TripStepCard} from '@/components/TripStepCard';
@@ -216,6 +217,11 @@ export default function TripDetailPage() {
   const [highlightedCity, setHighlightedCity] = useState<string | null>(null);
   const [highlightedSpotId, setHighlightedSpotId] = useState<string | null>(null);
 
+  // Edit destination state
+  const [editingDestination, setEditingDestination] = useState<Destination | null>(null);
+  const [showEditDestModal, setShowEditDestModal] = useState(false);
+  const [isSavingDestination, setIsSavingDestination] = useState(false);
+
   const SCREEN_HEIGHT = Dimensions.get('window').height;
   const MAP_DEFAULT_HEIGHT = 300;
   const MAP_EXPANDED_HEIGHT = SCREEN_HEIGHT - 120; // leave room for status bar + close button
@@ -350,6 +356,38 @@ export default function TripDetailPage() {
     setPendingDestinations([]);
   }, []);
 
+  const handleEditDestination = useCallback((dest: Destination) => {
+    setEditingDestination(dest);
+    setShowEditDestModal(true);
+  }, []);
+
+  const handleSaveDestination = useCallback(async (cityName: string, country: string) => {
+    if (!editingDestination) return;
+    setIsSavingDestination(true);
+    try {
+      await updateDestination(editingDestination.id, {
+        city_name: cityName,
+        country: country || undefined,
+      });
+      // Update pending destinations locally
+      setPendingDestinations(prev =>
+        prev.map(d =>
+          d.id === editingDestination.id
+            ? { ...d, city: cityName, country: country || null }
+            : d
+        )
+      );
+      setShowEditDestModal(false);
+      setEditingDestination(null);
+    } catch (err) {
+      console.error('[handleSaveDestination] Error:', err);
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      Alert.alert(t('tripDetail.error'), message);
+    } finally {
+      setIsSavingDestination(false);
+    }
+  }, [editingDestination, t]);
+
   const confirmOrder = useCallback(async () => {
     if (!tripId) return;
     if (pendingDestinations.length === 0) {
@@ -480,6 +518,7 @@ export default function TripDetailPage() {
                   highlightedId={highlightedSpotId}
                   onMarkerPress={(id) => setHighlightedSpotId(prev => prev === id ? null : id)}
                   hideApproximateBadge
+                  onPersistCoordinates={updateSpotCoordinates}
                 />
               ) : destinations.length > 0 ? (
                 <TripMap
@@ -820,6 +859,12 @@ export default function TripDetailPage() {
                                     )}
                                   </View>
                                   <TouchableOpacity
+                                    onPress={() => handleEditDestination(dest)}
+                                    style={{ padding: 8 }}
+                                  >
+                                    <Icon name={"pencil-line"} size={16} color="rgba(255,255,255,0.5)" />
+                                  </TouchableOpacity>
+                                  <TouchableOpacity
                                     onPress={() => {
                                       Alert.alert(
                                         t('tripDetail.deleteCity'),
@@ -893,6 +938,8 @@ export default function TripDetailPage() {
                         return selectedDay ? (
                           <DayDetailView
                             day={selectedDay}
+                            tripId={tripId}
+                            allDays={days}
                             onRefresh={loadTrip}
                             highlightedSpotId={highlightedSpotId}
                             onHighlightChange={setHighlightedSpotId}
@@ -960,6 +1007,21 @@ export default function TripDetailPage() {
             tripDays={days as unknown as ReviewDbDay[]}
             existingDestinations={days.map((d) => d.location).filter((loc): loc is string => !!loc)}
             onCityAdded={loadTrip}
+          />
+        )}
+
+        {/* Edit Destination Modal */}
+        {editingDestination && (
+          <DestinationFormModal
+            visible={showEditDestModal}
+            onClose={() => {
+              setShowEditDestModal(false);
+              setEditingDestination(null);
+            }}
+            onSave={handleSaveDestination}
+            initialCityName={editingDestination.city || ''}
+            initialCountry={editingDestination.country || ''}
+            isSaving={isSavingDestination}
           />
         )}
       </ImageBackground>

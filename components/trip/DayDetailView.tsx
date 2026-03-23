@@ -15,12 +15,16 @@ import {
   View,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
 import { SecondaryButton, type ColorScheme } from '@/components/SecondaryButton';
 import { TicketCard, type CategoryType } from '@/components/TicketCard';
 import { SpotFormModal } from '@/components/trip/SpotFormModal';
 import { HighlightCategory } from '@/types/api';
-import { updateSpot, deleteSpot, type SpotUpdatePayload } from '@/services/reviewService';
+import { updateSpot, deleteSpot, createSpot, reorderSpots, moveSpotToDay, type SpotUpdatePayload, type CreateSpotPayload } from '@/services/reviewService';
+import { PrimaryButton } from '@/components/PrimaryButton';
+import { MoveSpotModal } from '@/components/trip/MoveSpotModal';
 import Icon from 'react-native-remix-icon';
+import { SPOT_TYPE_TO_CATEGORY } from '@/constants/spotTypes';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -58,36 +62,16 @@ export interface DbDay {
 
 interface DayDetailViewProps {
   day: DbDay;
+  tripId: string;
+  allDays: DbDay[];
   onRefresh: () => void;
   highlightedSpotId: string | null;
   onHighlightChange: (id: string | null) => void;
 }
 
 // ---------------------------------------------------------------------------
-// Category Mappings
+// Category Mappings (SPOT_TYPE_TO_CATEGORY imported from @/constants/spotTypes)
 // ---------------------------------------------------------------------------
-
-const SPOT_TYPE_TO_CATEGORY: Record<string, HighlightCategory> = {
-  restaurant: 'food',
-  food: 'food',
-  café: 'food',
-  cafe: 'food',
-  bar: 'nightlife',
-  club: 'nightlife',
-  nightclub: 'nightlife',
-  museum: 'culture',
-  monument: 'culture',
-  gallery: 'culture',
-  historic: 'culture',
-  park: 'nature',
-  garden: 'nature',
-  beach: 'nature',
-  hiking: 'nature',
-  shop: 'shopping',
-  market: 'shopping',
-  mall: 'shopping',
-  boutique: 'shopping',
-};
 
 const CATEGORY_TO_COLOR_SCHEME: Record<HighlightCategory, ColorScheme> = {
   food: 'restaurant',
@@ -110,14 +94,15 @@ const CATEGORY_ICONS: Record<HighlightCategory, string> = {
 function mapSpotTypeToCategory(spotType: string | null): HighlightCategory {
   if (!spotType) return 'other';
   const lower = spotType.toLowerCase();
-  return SPOT_TYPE_TO_CATEGORY[lower] || 'other';
+  const category = SPOT_TYPE_TO_CATEGORY[lower];
+  return (category as HighlightCategory) || 'other';
 }
 
 // ---------------------------------------------------------------------------
 // DayDetailView Component
 // ---------------------------------------------------------------------------
 
-export function DayDetailView({ day, onRefresh, highlightedSpotId, onHighlightChange }: DayDetailViewProps) {
+export function DayDetailView({ day, tripId, allDays, onRefresh, highlightedSpotId, onHighlightChange }: DayDetailViewProps) {
   const { t } = useTranslation();
   const spots = useMemo(() => day.spots || [], [day.spots]);
 
@@ -129,6 +114,20 @@ export function DayDetailView({ day, onRefresh, highlightedSpotId, onHighlightCh
   const [editingSpot, setEditingSpot] = useState<DbSpot | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Create state
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+
+  // Reorder state
+  const [isReordering, setIsReordering] = useState(false);
+  const [pendingSpots, setPendingSpots] = useState<DbSpot[]>([]);
+  const [isSavingOrder, setIsSavingOrder] = useState(false);
+
+  // Move state
+  const [movingSpot, setMovingSpot] = useState<DbSpot | null>(null);
+  const [showMoveModal, setShowMoveModal] = useState(false);
+  const [isMoving, setIsMoving] = useState(false);
 
   // Category counts
   const categoryCounts = useMemo(() => {
@@ -245,6 +244,79 @@ export function DayDetailView({ day, onRefresh, highlightedSpotId, onHighlightCh
     }
   }, [editingSpot, t, onRefresh]);
 
+  const handleCreateSpot = useCallback(async (payload: Omit<CreateSpotPayload, 'day_id'>) => {
+    setIsCreating(true);
+    try {
+      await createSpot(tripId, {
+        day_id: day.id,
+        name: payload.name || '',
+        spot_type: payload.spot_type,
+        address: payload.address,
+        duration_minutes: payload.duration_minutes,
+        price_range: payload.price_range,
+        tips: payload.tips,
+        highlight: payload.highlight,
+      });
+      setShowCreateModal(false);
+      onRefresh();
+    } catch (err) {
+      console.error('Create error:', err);
+      Alert.alert(t('cityDetail.error'), t('cityDetail.cannotCreatePoint'));
+    } finally {
+      setIsCreating(false);
+    }
+  }, [tripId, day.id, t, onRefresh]);
+
+  // Reorder handlers
+  const enterReorderMode = useCallback(() => {
+    setPendingSpots([...spots]);
+    setIsReordering(true);
+  }, [spots]);
+
+  const cancelReorderMode = useCallback(() => {
+    setIsReordering(false);
+    setPendingSpots([]);
+  }, []);
+
+  const confirmReorder = useCallback(async () => {
+    setIsSavingOrder(true);
+    try {
+      await reorderSpots(day.id, {
+        spots: pendingSpots.map((s, idx) => ({ id: s.id, order: idx + 1 })),
+      });
+      setIsReordering(false);
+      setPendingSpots([]);
+      onRefresh();
+    } catch (err) {
+      console.error('Reorder error:', err);
+      Alert.alert(t('cityDetail.error'), t('cityDetail.cannotReorderPoints'));
+    } finally {
+      setIsSavingOrder(false);
+    }
+  }, [day.id, pendingSpots, t, onRefresh]);
+
+  // Move handlers
+  const handleOpenMove = useCallback((spot: DbSpot) => {
+    setMovingSpot(spot);
+    setShowMoveModal(true);
+  }, []);
+
+  const handleMoveSpot = useCallback(async (targetDayId: string) => {
+    if (!movingSpot) return;
+    setIsMoving(true);
+    try {
+      await moveSpotToDay(movingSpot.id, { target_day_id: targetDayId });
+      setShowMoveModal(false);
+      setMovingSpot(null);
+      onRefresh();
+    } catch (err) {
+      console.error('Move error:', err);
+      Alert.alert(t('cityDetail.error'), t('tripDetail.cannotMoveSpot'));
+    } finally {
+      setIsMoving(false);
+    }
+  }, [movingSpot, t, onRefresh]);
+
   // Day header
   const dayTitle = day.theme || day.location || t('tripDetail.day', { number: day.day_number });
 
@@ -252,15 +324,47 @@ export function DayDetailView({ day, onRefresh, highlightedSpotId, onHighlightCh
     <View style={{ flex: 1 }}>
       {/* Day header */}
       <View className="mb-4">
-        <Text
-          style={{
-            fontFamily: 'Righteous',
-            fontSize: 18,
-            color: '#FAFAFF',
-          }}
-        >
-          {dayTitle}
-        </Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Text
+            style={{
+              fontFamily: 'Righteous',
+              fontSize: 18,
+              color: '#FAFAFF',
+              flex: 1,
+            }}
+          >
+            {dayTitle}
+          </Text>
+          {/* Reorder button */}
+          {spots.length > 1 && !isReordering && (
+            <SecondaryButton
+              title={t('tripDetail.reorder')}
+              variant="square"
+              size="sm"
+              leftIcon="draggable"
+              onPress={enterReorderMode}
+            />
+          )}
+          {isReordering && (
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <SecondaryButton
+                title={t('tripDetail.cancel')}
+                variant="square"
+                size="sm"
+                onPress={cancelReorderMode}
+              />
+              <SecondaryButton
+                title={t('tripDetail.ok')}
+                leftIcon="check-line"
+                variant="square"
+                size="sm"
+                active
+                onPress={confirmReorder}
+                disabled={isSavingOrder}
+              />
+            </View>
+          )}
+        </View>
         {day.accommodation_name && (
           <View className="flex-row items-center mt-2" style={{ gap: 6 }}>
             <Icon name="hotel-line" size={14} color="rgba(255, 255, 255, 0.5)" />
@@ -277,8 +381,8 @@ export function DayDetailView({ day, onRefresh, highlightedSpotId, onHighlightCh
         )}
       </View>
 
-      {/* Category Filters */}
-      {showFilters && (
+      {/* Category Filters - hide in reorder mode */}
+      {showFilters && !isReordering && (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -314,7 +418,61 @@ export function DayDetailView({ day, onRefresh, highlightedSpotId, onHighlightCh
       )}
 
       {/* Spots List */}
-      {filteredSpots.length === 0 ? (
+      {isReordering ? (
+        /* Reorder mode with DraggableFlatList */
+        <DraggableFlatList
+          data={pendingSpots}
+          keyExtractor={(item) => item.id}
+          onDragEnd={({ data }) => setPendingSpots(data)}
+          scrollEnabled={false}
+          renderItem={({ item: spot, drag, isActive }: RenderItemParams<DbSpot>) => (
+            <ScaleDecorator activeScale={0.95}>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onLongPress={drag}
+                delayLongPress={100}
+                disabled={isActive}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: isActive ? 'rgba(30, 26, 100, 0.8)' : 'rgba(30, 26, 100, 0.55)',
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: isActive ? 'rgba(82, 72, 212, 0.5)' : 'rgba(255, 255, 255, 0.09)',
+                  paddingVertical: 12,
+                  paddingHorizontal: 14,
+                  marginBottom: 8,
+                }}
+              >
+                <View style={{
+                  width: 32, height: 32, borderRadius: 8,
+                  backgroundColor: CATEGORY_TO_COLOR_SCHEME[mapSpotTypeToCategory(spot.spot_type)] === 'restaurant' ? '#f97316' :
+                                   CATEGORY_TO_COLOR_SCHEME[mapSpotTypeToCategory(spot.spot_type)] === 'culture' ? '#8b5cf6' :
+                                   CATEGORY_TO_COLOR_SCHEME[mapSpotTypeToCategory(spot.spot_type)] === 'nature' ? '#22c55e' :
+                                   CATEGORY_TO_COLOR_SCHEME[mapSpotTypeToCategory(spot.spot_type)] === 'shopping' ? '#ec4899' :
+                                   CATEGORY_TO_COLOR_SCHEME[mapSpotTypeToCategory(spot.spot_type)] === 'nightlife' ? '#6366f1' : '#52525b',
+                  alignItems: 'center', justifyContent: 'center', marginRight: 12,
+                }}>
+                  <Icon name={CATEGORY_ICONS[mapSpotTypeToCategory(spot.spot_type)] as any} size={16} color="#fff" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: 'Righteous', fontSize: 14, color: '#fff' }}>
+                    {spot.name}
+                  </Text>
+                  {spot.spot_type && (
+                    <Text style={{ fontFamily: 'DMSans', fontSize: 11, color: 'rgba(255,255,255,0.45)', marginTop: 2 }}>
+                      {spot.spot_type}
+                    </Text>
+                  )}
+                </View>
+                <View style={{ padding: 8 }}>
+                  <Icon name="draggable" size={18} color={isActive ? '#5248D4' : 'rgba(255,255,255,0.45)'} />
+                </View>
+              </TouchableOpacity>
+            </ScaleDecorator>
+          )}
+        />
+      ) : filteredSpots.length === 0 ? (
         <View className="empty-state" style={{ paddingVertical: 40 }}>
           <Icon name="map-pin-line" size={32} color="#52525b" style={{ opacity: 0.4 }} />
           <Text className="text-sm text-zinc-500 mt-2 font-dmsans">
@@ -388,6 +546,20 @@ export function DayDetailView({ day, onRefresh, highlightedSpotId, onHighlightCh
                   >
                     <Icon name="pencil-line" size={17} color="rgba(255, 255, 255, 0.4)" />
                   </TouchableOpacity>
+                  {allDays.length > 1 && (
+                    <TouchableOpacity
+                      onPress={() => handleOpenMove(spot)}
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 16,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Icon name="arrow-left-right-line" size={17} color="rgba(255, 255, 255, 0.4)" />
+                    </TouchableOpacity>
+                  )}
                   <TouchableOpacity
                     onPress={() => handleDeleteSpot(spot.id)}
                     style={{
@@ -407,6 +579,21 @@ export function DayDetailView({ day, onRefresh, highlightedSpotId, onHighlightCh
         </View>
       )}
 
+      {/* Add Spot Button - hide in reorder mode */}
+      {!isReordering && (
+        <View style={{ marginTop: 16 }}>
+          <PrimaryButton
+            title={t('cityDetail.addPoint')}
+            leftIcon="add-line"
+            color="purple"
+            size="sm"
+            fullWidth
+            onPress={() => setShowCreateModal(true)}
+            style={{ opacity: 0.8 }}
+          />
+        </View>
+      )}
+
       {/* Edit Modal */}
       {showEditModal && editingSpot && (
         <SpotFormModal
@@ -418,6 +605,33 @@ export function DayDetailView({ day, onRefresh, highlightedSpotId, onHighlightCh
           }}
           onSave={handleSaveEdit}
           isSaving={isSaving}
+          mode="edit"
+        />
+      )}
+
+      {/* Create Modal */}
+      <SpotFormModal
+        visible={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onSave={async () => {}}
+        onCreate={handleCreateSpot}
+        isSaving={isCreating}
+        mode="create"
+      />
+
+      {/* Move Modal */}
+      {movingSpot && (
+        <MoveSpotModal
+          visible={showMoveModal}
+          onClose={() => {
+            setShowMoveModal(false);
+            setMovingSpot(null);
+          }}
+          onMove={handleMoveSpot}
+          currentDayId={day.id}
+          days={allDays}
+          spotName={movingSpot.name}
+          isMoving={isMoving}
         />
       )}
     </View>

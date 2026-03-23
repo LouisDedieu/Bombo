@@ -1,5 +1,5 @@
 /**
- * SpotFormModal - Modal for editing trip spots
+ * SpotFormModal - Modal for creating and editing trip spots
  * Similar to HighlightFormModal but for DbSpot
  */
 import React, { useState, useEffect } from 'react';
@@ -9,7 +9,8 @@ import Icon from 'react-native-remix-icon';
 import { HighlightCategory, HIGHLIGHT_CATEGORIES } from '@/types/api';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { SecondaryButton, type ColorScheme } from '@/components/SecondaryButton';
-import type { SpotUpdatePayload } from '@/services/reviewService';
+import type { SpotUpdatePayload, CreateSpotPayload } from '@/services/reviewService';
+import { CATEGORY_TO_SPOT_TYPE, SPOT_TYPE_TO_CATEGORY } from '@/constants/spotTypes';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -28,14 +29,16 @@ interface DbSpot {
 
 interface SpotFormModalProps {
   visible: boolean;
-  spot: DbSpot;
+  spot?: DbSpot; // Optional for create mode
   onClose: () => void;
   onSave: (payload: SpotUpdatePayload) => Promise<void>;
+  onCreate?: (payload: Omit<CreateSpotPayload, 'day_id'>) => Promise<void>;
   isSaving: boolean;
+  mode?: 'edit' | 'create';
 }
 
 // ---------------------------------------------------------------------------
-// Category Mapping
+// Category Mapping (uses shared constants from @/constants/spotTypes)
 // ---------------------------------------------------------------------------
 
 const CATEGORY_TO_COLOR_SCHEME: Record<HighlightCategory, ColorScheme> = {
@@ -47,29 +50,7 @@ const CATEGORY_TO_COLOR_SCHEME: Record<HighlightCategory, ColorScheme> = {
   other: 'default',
 };
 
-const SPOT_TYPE_TO_CATEGORY: Record<string, HighlightCategory> = {
-  restaurant: 'food',
-  food: 'food',
-  café: 'food',
-  cafe: 'food',
-  bar: 'nightlife',
-  club: 'nightlife',
-  museum: 'culture',
-  monument: 'culture',
-  park: 'nature',
-  garden: 'nature',
-  shop: 'shopping',
-  market: 'shopping',
-};
-
-const CATEGORY_TO_SPOT_TYPE: Record<HighlightCategory, string> = {
-  food: 'restaurant',
-  culture: 'monument',
-  nature: 'park',
-  shopping: 'shop',
-  nightlife: 'bar',
-  other: 'other',
-};
+// Note: CATEGORY_TO_SPOT_TYPE and SPOT_TYPE_TO_CATEGORY are imported from @/constants/spotTypes
 
 const getCategoryLabel = (cat: HighlightCategory, t: (key: string) => string): string => {
   switch (cat) {
@@ -85,7 +66,8 @@ const getCategoryLabel = (cat: HighlightCategory, t: (key: string) => string): s
 
 function getCategory(spotType: string | null): HighlightCategory {
   if (!spotType) return 'other';
-  return SPOT_TYPE_TO_CATEGORY[spotType.toLowerCase()] || 'other';
+  const category = SPOT_TYPE_TO_CATEGORY[spotType.toLowerCase()];
+  return (category as HighlightCategory) || 'other';
 }
 
 // ---------------------------------------------------------------------------
@@ -97,41 +79,69 @@ export function SpotFormModal({
   spot,
   onClose,
   onSave,
+  onCreate,
   isSaving,
+  mode = 'edit',
 }: SpotFormModalProps) {
   const { t } = useTranslation();
+  const isCreateMode = mode === 'create';
 
   // Form state
-  const [name, setName] = useState(spot.name);
-  const [category, setCategory] = useState<HighlightCategory>(getCategory(spot.spot_type));
-  const [address, setAddress] = useState(spot.address || '');
-  const [tips, setTips] = useState(spot.tips || '');
-  const [priceRange, setPriceRange] = useState(spot.price_range || '');
-  const [durationMinutes, setDurationMinutes] = useState(spot.duration_minutes?.toString() || '');
-  const [isHighlight, setIsHighlight] = useState(spot.highlight);
+  const [name, setName] = useState(spot?.name || '');
+  const [category, setCategory] = useState<HighlightCategory>(getCategory(spot?.spot_type || null));
+  const [address, setAddress] = useState(spot?.address || '');
+  const [tips, setTips] = useState(spot?.tips || '');
+  const [priceRange, setPriceRange] = useState(spot?.price_range || '');
+  const [durationMinutes, setDurationMinutes] = useState(spot?.duration_minutes?.toString() || '');
+  const [isHighlight, setIsHighlight] = useState(spot?.highlight || false);
 
-  // Reset form when spot changes
+  // Reset form when spot changes or modal opens
   useEffect(() => {
-    setName(spot.name);
-    setCategory(getCategory(spot.spot_type));
-    setAddress(spot.address || '');
-    setTips(spot.tips || '');
-    setPriceRange(spot.price_range || '');
-    setDurationMinutes(spot.duration_minutes?.toString() || '');
-    setIsHighlight(spot.highlight);
-  }, [spot]);
+    if (visible) {
+      if (isCreateMode) {
+        setName('');
+        setCategory('other');
+        setAddress('');
+        setTips('');
+        setPriceRange('');
+        setDurationMinutes('');
+        setIsHighlight(false);
+      } else if (spot) {
+        setName(spot.name);
+        setCategory(getCategory(spot.spot_type));
+        setAddress(spot.address || '');
+        setTips(spot.tips || '');
+        setPriceRange(spot.price_range || '');
+        setDurationMinutes(spot.duration_minutes?.toString() || '');
+        setIsHighlight(spot.highlight);
+      }
+    }
+  }, [spot, visible, isCreateMode]);
 
   const handleSave = async () => {
-    const payload: SpotUpdatePayload = {
-      name: name.trim(),
-      spot_type: CATEGORY_TO_SPOT_TYPE[category],
-      address: address.trim() || null,
-      tips: tips.trim() || null,
-      price_range: priceRange.trim() || null,
-      duration_minutes: durationMinutes ? parseInt(durationMinutes, 10) : null,
-      highlight: isHighlight,
-    };
-    await onSave(payload);
+    if (isCreateMode && onCreate) {
+      const createPayload: Omit<CreateSpotPayload, 'day_id'> = {
+        name: name.trim(),
+        spot_type: CATEGORY_TO_SPOT_TYPE[category],
+        address: address.trim() || undefined,
+        tips: tips.trim() || undefined,
+        price_range: priceRange.trim() || undefined,
+        duration_minutes: durationMinutes ? parseInt(durationMinutes, 10) : undefined,
+        highlight: isHighlight,
+      };
+      await onCreate(createPayload);
+    } else {
+      const updatePayload: SpotUpdatePayload = {
+        name: name.trim(),
+        spot_type: CATEGORY_TO_SPOT_TYPE[category],
+        address: address.trim() || null,
+        tips: tips.trim() || null,
+        price_range: priceRange.trim() || null,
+        duration_minutes: durationMinutes ? parseInt(durationMinutes, 10) : null,
+        highlight: isHighlight,
+      };
+      await onSave(updatePayload);
+    }
   };
 
   const canSubmit = name.trim().length > 0;
@@ -150,7 +160,9 @@ export function SpotFormModal({
         >
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.headerTitle}>{t('cityDetail.editPoint')}</Text>
+            <Text style={styles.headerTitle}>
+              {isCreateMode ? t('cityDetail.addPoint') : t('cityDetail.editPoint')}
+            </Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <Icon name="close-line" size={22} color="rgba(255, 255, 255, 0.5)" />
             </TouchableOpacity>
@@ -262,7 +274,7 @@ export function SpotFormModal({
           {/* Submit Button */}
           <View style={styles.footer}>
             <PrimaryButton
-              title={t('cityDetail.save')}
+              title={isCreateMode ? t('cityDetail.add') : t('cityDetail.save')}
               onPress={handleSave}
               disabled={!canSubmit}
               loading={isSaving}
