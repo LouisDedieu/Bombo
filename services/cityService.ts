@@ -120,3 +120,11 @@ export async function updateCityCoordinates(
 ): Promise<void> {
   await apiPatch(`/cities/${cityId}`, { latitude: lat, longitude: lon });
 }
+
+/**
+ * Create a manual city with pre-filled template
+ * @returns The created city ID
+ */
+export async function createManualCity(cityName?: string): Promise<{ city_id: string }> {
+  return apiPost('/cities/create-manual', { city_name: cityName });
+}
