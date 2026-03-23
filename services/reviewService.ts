@@ -51,9 +51,9 @@ export type SpotUpdatePayload = Partial<Pick<
 
 // ── Fetch ─────────────────────────────────────────────────────────────────────
 
-export async function fetchTripForReview(tripId: string): Promise<DbTrip | null> {
+export async function fetchTripForEdit(tripId: string): Promise<DbTrip | null> {
   try {
-    return await apiFetch<DbTrip>(`/review/${tripId}`);
+    return await apiFetch<DbTrip>(`/trips/${tripId}/edit`);
   } catch {
     return null;
   }
@@ -62,7 +62,7 @@ export async function fetchTripForReview(tripId: string): Promise<DbTrip | null>
 // ── Day mutations ─────────────────────────────────────────────────────────────
 
 export async function setDayValidated(dayId: string, validated: boolean): Promise<void> {
-  await apiPatch(`/review/days/${dayId}/validate`, { validated });
+  await apiPatch(`/trips/days/${dayId}/validate`, { validated });
 }
 
 /**
@@ -70,17 +70,17 @@ export async function setDayValidated(dayId: string, validated: boolean): Promis
  * Délègue au backend la synchronisation des destinations.
  */
 export async function syncDestinations(tripId: string): Promise<void> {
-  await apiPost(`/review/${tripId}/sync`);
+  await apiPost(`/trips/${tripId}/sync`);
 }
 
 // ── Spot mutations ────────────────────────────────────────────────────────────
 
 export async function updateSpot(spotId: string, payload: SpotUpdatePayload): Promise<void> {
-  await apiPatch(`/review/spots/${spotId}`, payload);
+  await apiPatch(`/trips/spots/${spotId}`, payload);
 }
 
 export async function deleteSpot(spotId: string): Promise<void> {
-  await apiDelete(`/review/spots/${spotId}`);
+  await apiDelete(`/trips/spots/${spotId}`);
 }
 
 // ── Add city to trip ─────────────────────────────────────────────────────────
@@ -102,7 +102,7 @@ export async function addCityToTrip(
   tripId: string,
   payload: AddCityToTripPayload
 ): Promise<AddCityToTripResult> {
-  return apiPost<AddCityToTripResult>(`/review/${tripId}/add-city`, payload);
+  return apiPost<AddCityToTripResult>(`/trips/${tripId}/add-city`, payload);
 }
 
 // ── Add new destination (manual city) ────────────────────────────────────────
@@ -125,13 +125,13 @@ export async function addDestinationToTrip(
   tripId: string,
   payload: AddDestinationPayload
 ): Promise<AddDestinationResult> {
-  return apiPost<AddDestinationResult>(`/review/${tripId}/add-destination`, payload);
+  return apiPost<AddDestinationResult>(`/trips/${tripId}/add-destination`, payload);
 }
 
 // ── Delete destination ────────────────────────────────────────────────────────
 
 export async function deleteDestination(tripId: string, destId: string): Promise<void> {
-  await apiDelete(`/review/${tripId}/destinations/${destId}`);
+  await apiDelete(`/trips/${tripId}/destinations/${destId}`);
 }
 
 // ── Reorder destinations ──────────────────────────────────────────────────────
@@ -144,5 +144,74 @@ export async function reorderDestinations(
   tripId: string,
   payload: ReorderDestinationsPayload
 ): Promise<void> {
-  await apiPatch(`/review/${tripId}/destinations/reorder`, payload);
+  await apiPatch(`/trips/${tripId}/destinations/reorder`, payload);
+}
+
+// ── Create spot (manual) ─────────────────────────────────────────────────────
+
+export interface CreateSpotPayload {
+  day_id: string;
+  name: string;
+  spot_type?: string;
+  address?: string;
+  duration_minutes?: number;
+  price_range?: string;
+  tips?: string;
+  highlight?: boolean;
+  latitude?: number;
+  longitude?: number;
+}
+
+export interface CreateSpotResult {
+  id: string;
+  name: string;
+  day_id: string;
+}
+
+export async function createSpot(
+  tripId: string,
+  payload: CreateSpotPayload
+): Promise<CreateSpotResult> {
+  return apiPost<CreateSpotResult>(`/trips/${tripId}/spots`, payload);
+}
+
+// ── Reorder spots ────────────────────────────────────────────────────────────
+
+export interface ReorderSpotsPayload {
+  spots: Array<{ id: string; order: number }>;
+}
+
+export async function reorderSpots(
+  dayId: string,
+  payload: ReorderSpotsPayload
+): Promise<void> {
+  await apiPatch(`/trips/days/${dayId}/spots/reorder`, payload);
+}
+
+// ── Move spot to another day ─────────────────────────────────────────────────
+
+export interface MoveSpotPayload {
+  target_day_id: string;
+  order?: number;
+}
+
+export async function moveSpotToDay(
+  spotId: string,
+  payload: MoveSpotPayload
+): Promise<void> {
+  await apiPatch(`/trips/spots/${spotId}/move`, payload);
+}
+
+// ── Update destination (name/country) ────────────────────────────────────────
+
+export interface UpdateDestinationPayload {
+  city_name?: string;
+  country?: string;
+}
+
+export async function updateDestination(
+  destId: string,
+  payload: UpdateDestinationPayload
+): Promise<void> {
+  await apiPatch(`/trips/destinations/${destId}`, payload);
 }

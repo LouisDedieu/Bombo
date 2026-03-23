@@ -24,7 +24,7 @@ import { isTripSaved, unsaveTrip, validateAndSaveTrip } from '@/services/tripSer
 import { markNotificationsReadByEntity } from '@/services/notificationService';
 import { useAuth } from '@/context/AuthContext';
 import {
-  fetchTripForReview,
+  fetchTripForEdit,
   setDayValidated,
   updateSpot,
   deleteSpot,
@@ -518,7 +518,7 @@ export default function ReviewModePage() {
     if (!tripId) return;
     // Marquer les notifications liées comme lues
     markNotificationsReadByEntity('trip', tripId);
-    fetchTripForReview(tripId).then((t) => {
+    fetchTripForEdit(tripId).then((t) => {
       setTrip(t);
       setLoading(false);
     });
@@ -573,7 +573,7 @@ export default function ReviewModePage() {
     try {
       await updateSpot(spotId, payload);
     } catch (err: any) {
-      if (tripId) fetchTripForReview(tripId).then((t) => t && setTrip(t));
+      if (tripId) fetchTripForEdit(tripId).then((t) => t && setTrip(t));
     }
   }, [tripId]);
 
@@ -590,14 +590,14 @@ export default function ReviewModePage() {
     try {
       await deleteSpot(spotId);
     } catch (err: any) {
-      if (tripId) fetchTripForReview(tripId).then((t) => t && setTrip(t));
+      if (tripId) fetchTripForEdit(tripId).then((t) => t && setTrip(t));
     }
   }, [tripId]);
 
   // Refresh trip after adding city
   const handleCityAdded = useCallback(() => {
     if (tripId) {
-      fetchTripForReview(tripId).then((t) => t && setTrip(t));
+      fetchTripForEdit(tripId).then((t) => t && setTrip(t));
     }
   }, [tripId]);
 

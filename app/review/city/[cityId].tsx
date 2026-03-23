@@ -28,7 +28,7 @@ import { isCitySaved, saveCity, unsaveCity, checkCityMatch, mergeCities } from '
 import { markNotificationsReadByEntity } from '@/services/notificationService';
 import { useAuth } from '@/context/AuthContext';
 import {
-  fetchCityForReview,
+  fetchCityForEdit,
   updateHighlight,
   deleteHighlight,
   reorderHighlights,
@@ -84,7 +84,7 @@ export default function CityReviewPage() {
     if (!cityId) return;
     // Marquer les notifications liées comme lues
     markNotificationsReadByEntity('city', cityId);
-    fetchCityForReview(cityId).then((c) => {
+    fetchCityForEdit(cityId).then((c) => {
       setCity(c);
       setLoading(false);
 
@@ -169,7 +169,7 @@ export default function CityReviewPage() {
         await updateHighlight(highlightId, payload);
       } catch {
         // Revert on error
-        if (cityId) fetchCityForReview(cityId).then((c) => c && setCity(c));
+        if (cityId) fetchCityForEdit(cityId).then((c) => c && setCity(c));
       }
     },
     [cityId]
@@ -188,7 +188,7 @@ export default function CityReviewPage() {
       try {
         await deleteHighlight(highlightId);
       } catch {
-        if (cityId) fetchCityForReview(cityId).then((c) => c && setCity(c));
+        if (cityId) fetchCityForEdit(cityId).then((c) => c && setCity(c));
       }
     },
     [cityId]
@@ -270,7 +270,7 @@ export default function CityReviewPage() {
         await reorderHighlights(cityId, reorderPayload);
       } catch {
         // Revert on error
-        fetchCityForReview(cityId).then((c) => c && setCity(c));
+        fetchCityForEdit(cityId).then((c) => c && setCity(c));
       }
     },
     [city, cityId]

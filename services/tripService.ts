@@ -73,7 +73,7 @@ export async function getUserSavedTrips(_userId: string) {
 
 export async function updateSpotCoordinates(spotId: string, lat: number, lon: number) {
   try {
-    await apiPatch(`/review/spots/${spotId}/coordinates`, { lat, lon });
+    await apiPatch(`/trips/spots/${spotId}/coordinates`, { lat, lon });
   } catch (e) {
     console.error(`Erreur update spot ${spotId}:`, e);
   }
@@ -81,9 +81,22 @@ export async function updateSpotCoordinates(spotId: string, lat: number, lon: nu
 
 export async function updateDestinationCoordinates(destId: string, lat: number, lon: number) {
   try {
-    await apiPatch(`/review/destinations/${destId}/coordinates`, { lat, lon });
+    await apiPatch(`/trips/destinations/${destId}/coordinates`, { lat, lon });
   } catch (e) {
     console.error(`Erreur update destination ${destId}:`, e);
   }
+}
+
+/**
+ * Create a manual trip
+ * @param title Optional trip title
+ * @param useTemplate If true, use pre-filled template (Paris 2 days). If false, create blank trip.
+ * @returns The created trip ID
+ */
+export async function createManualTrip(
+  title?: string,
+  useTemplate: boolean = true
+): Promise<{ trip_id: string }> {
+  return apiPost('/trips/create-manual', { title, use_template: useTemplate });
 }
 

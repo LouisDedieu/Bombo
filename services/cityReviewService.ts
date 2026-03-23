@@ -56,11 +56,11 @@ export interface CreateHighlightPayload {
 }
 
 /**
- * Fetch a city for review mode (includes all highlights, validated or not)
+ * Fetch a city for editing (includes all highlights, validated or not)
  */
-export async function fetchCityForReview(cityId: string): Promise<DbCity | null> {
+export async function fetchCityForEdit(cityId: string): Promise<DbCity | null> {
   try {
-    return await apiFetch<DbCity>(`/review/city/${cityId}`);
+    return await apiFetch<DbCity>(`/cities/${cityId}/edit`);
   } catch {
     return null;
   }
@@ -73,7 +73,7 @@ export async function updateHighlight(
   highlightId: string,
   payload: HighlightUpdatePayload
 ): Promise<void> {
-  await apiPatch(`/review/city/highlights/${highlightId}`, payload);
+  await apiPatch(`/cities/highlights/${highlightId}`, payload);
 }
 
 /**
@@ -84,7 +84,7 @@ export async function updateHighlightCoordinates(
   lat: number,
   lon: number
 ): Promise<void> {
-  await apiPatch(`/review/city/highlights/${highlightId}/coordinates`, { lat, lon });
+  await apiPatch(`/cities/highlights/${highlightId}/coordinates`, { lat, lon });
 }
 
 /**
@@ -94,7 +94,7 @@ export async function reorderHighlights(
   cityId: string,
   highlights: Array<{ id: string; order: number }>
 ): Promise<void> {
-  await apiPatch(`/review/city/highlights/reorder`, {
+  await apiPatch(`/cities/highlights/reorder`, {
     city_id: cityId,
     highlights,
   });
@@ -104,7 +104,7 @@ export async function reorderHighlights(
  * Delete a highlight
  */
 export async function deleteHighlight(highlightId: string): Promise<void> {
-  await apiDelete(`/review/city/highlights/${highlightId}`);
+  await apiDelete(`/cities/highlights/${highlightId}`);
 }
 
 /**
@@ -114,7 +114,7 @@ export async function createHighlight(
   cityId: string,
   payload: CreateHighlightPayload
 ): Promise<Highlight> {
-  return apiPost<Highlight>(`/review/city/${cityId}/highlights`, payload);
+  return apiPost<Highlight>(`/cities/${cityId}/highlights`, payload);
 }
 
 /**
@@ -126,7 +126,7 @@ export async function syncCityData(cityId: string): Promise<{
   synced: boolean;
   remaining_highlights: number;
 }> {
-  return apiPost(`/review/city/${cityId}/sync`);
+  return apiPost(`/cities/${cityId}/sync`);
 }
 
 /**
