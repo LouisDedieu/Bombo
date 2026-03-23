@@ -55,6 +55,7 @@ export interface JobStatusResponse {
   progress?:  number;
   result?:    AnalysisResponse;
   error?:     string;
+  video_too_long?: boolean;
   timestamp?: string;
 }
 
@@ -176,7 +177,10 @@ function streamJobUpdates(
       }
 
       if (data.status === 'error') {
-        const msg = data.error ?? "L'analyse a échoué côté serveur.";
+        let msg = data.error ?? "L'analyse a échoué côté serveur.";
+        if (data.video_too_long) {
+          msg = "Cette vidéo dépasse la durée maximale de 5 minutes. Choisissez une vidéo plus courte.";
+        }
         callbacks?.onError?.(msg);
         settle(() => reject(new Error(msg)));
       }
@@ -310,7 +314,11 @@ export async function analyzeVideoUrlPolling(
       return pollData.result;
     }
     if (pollData.status === 'error') {
-      throw new Error(pollData.error ?? "L'analyse a échoué.");
+      let msg = pollData.error ?? "L'analyse a échoué.";
+      if (pollData.video_too_long) {
+        msg = "Cette vidéo dépasse la durée maximale de 5 minutes. Choisissez une vidéo plus courte.";
+      }
+      throw new Error(msg);
     }
   }
 

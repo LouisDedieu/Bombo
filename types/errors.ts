@@ -38,6 +38,7 @@ export const ERROR_CATEGORY_MAP: Record<string, ErrorCategory> = {
   SERVER: 'server',
   DATABASE: 'server',
   INTERNAL: 'server',
+  VIDEO_TOO_LONG: 'video',
 };
 
 export function parseErrorCode(code: string): ParsedError {
