@@ -105,7 +105,8 @@
     "whoops": "Oups !",
     "tiktok": "TikTok",
     "instagramReels": "Instagram Reels",
-    "linkSubtitle": "Collez un lien TikTok ou Instagram, l'itinéraire complet sera extrait en quelques secondes."
+    "blogArticles": "Articles de blog",
+    "linkSubtitle": "Collez un lien TikTok, Instagram ou article de blog, l'itinéraire complet sera extrait en quelques secondes."
   },
   "jobs": {
     "pending": "En attente...",
@@ -116,6 +117,8 @@
     "city": "Ville",
     "trip": "Trip",
     "carousel": "Carrousel",
+    "article": "Article",
+    "minRead": "min de lecture",
     "images": "images",
     "places": "Lieux",
     "processing": "Traitement en cours...",
