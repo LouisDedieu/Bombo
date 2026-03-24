@@ -114,10 +114,12 @@ export default function CityDetailPage() {
   // Map animation
   const SCREEN_HEIGHT = Dimensions.get('window').height;
   const MAP_DEFAULT_HEIGHT = 300;
+  const MAP_COLLAPSED_HEIGHT = 180; // reduced height when scrolling down
   const MAP_EXPANDED_HEIGHT = SCREEN_HEIGHT - 120;
 
   const mapExpandAnim = useRef(new Animated.Value(MAP_DEFAULT_HEIGHT)).current;
   const mapGradientOpacity = useRef(new Animated.Value(1)).current;
+  const mapExpandMultiplier = useRef(new Animated.Value(1)).current; // 1 = follow scroll, 0 = ignore scroll (when expanded)
 
   // Scroll-driven animations
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -126,7 +128,7 @@ export default function CityDetailPage() {
   const scrollContentHeight = useRef(0);
   const scrollViewHeight = useRef(0);
 
-  const COLLAPSE_RANGE = 120;
+  const COLLAPSE_RANGE = 110;
 
   const vibeAndStatsOpacity = scrollY.interpolate({
     inputRange: [0, COLLAPSE_RANGE],
@@ -146,6 +148,19 @@ export default function CityDetailPage() {
     extrapolate: 'clamp',
   });
 
+  // Map height reduction on scroll: reduces from 0 to -120px as user scrolls down
+  const mapScrollDelta = scrollY.interpolate({
+    inputRange: [0, COLLAPSE_RANGE],
+    outputRange: [0, -(MAP_DEFAULT_HEIGHT - MAP_COLLAPSED_HEIGHT)], // 0 to -120
+    extrapolate: 'clamp',
+  });
+
+  // Combine expand animation with scroll collapse (scroll effect disabled when expanded)
+  const finalMapHeight = Animated.add(
+    mapExpandAnim,
+    Animated.multiply(mapScrollDelta, mapExpandMultiplier)
+  );
+
   const toggleMapExpanded = useCallback(() => {
     const expanding = !isMapExpanded;
     setIsMapExpanded(expanding);
@@ -158,7 +173,12 @@ export default function CityDetailPage() {
         useNativeDriver: false,
       }),
       Animated.timing(mapGradientOpacity, {
-        toValue: expanding ? 0 : 1,
+        toValue: expanding ? 0.5 : 1,
+        duration: 250,
+        useNativeDriver: false,
+      }),
+      Animated.timing(mapExpandMultiplier, {
+        toValue: expanding ? 0 : 1, // disable scroll effect when expanded
         duration: 250,
         useNativeDriver: false,
       }),
@@ -537,8 +557,8 @@ export default function CityDetailPage() {
 
       {/* Content */}
       <View style={{ flex: 1 }}>
-        {/* Hero Map - single instance with gradient overlay */}
-        <Animated.View style={{ width: '100%', height: mapExpandAnim }}>
+        {/* Hero Map - animated height expand/collapse + scroll collapse */}
+        <Animated.View style={{ width: '100%', height: finalMapHeight }}>
           {/* Map - single instance */}
           <CityMap
             highlights={highlights}
@@ -577,7 +597,7 @@ export default function CityDetailPage() {
               bottom: 0,
               left: 0,
               right: 0,
-              height: 50,
+              height: 20,
               opacity: mapGradientOpacity,
               overflow: 'hidden',
             }}
@@ -712,68 +732,16 @@ export default function CityDetailPage() {
           />
         </View>
 
-        {/* Tab Content */}
-        <Animated.ScrollView
-          ref={outerScrollRef}
-          style={{ flex: 1 }}
-          contentContainerStyle={{ paddingBottom: insets.bottom + 80, paddingTop: 24 }}
-          showsVerticalScrollIndicator={false}
-          scrollEventThrottle={16}
-          onLayout={(e) => {
-            scrollViewHeight.current = e.nativeEvent.layout.height;
-          }}
-          onContentSizeChange={(_, h) => {
-            scrollContentHeight.current = h;
-          }}
-          onScroll={(e: any) => {
-            const y = e.nativeEvent.contentOffset.y;
-            const isScrollable = scrollContentHeight.current > scrollViewHeight.current;
-            const effectiveY = isScrollable ? Math.max(0, y) : 0;
-            scrollY.setValue(effectiveY);
-            scrollYJS.setValue(effectiveY);
-          }}
-        >
-          {/* Highlights Tab */}
-          {activeTab === 'highlights' && (
-            <View style={{ paddingHorizontal: 16 }}>
-              {/* Header with Reorder button */}
-              {highlights.length > 1 && (
-                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 12 }}>
-                  {!isReordering ? (
-                    <SecondaryButton
-                      title={t('tripDetail.reorder')}
-                      variant="square"
-                      size="sm"
-                      leftIcon="draggable"
-                      onPress={enterReorderMode}
-                    />
-                  ) : (
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                      <SecondaryButton
-                        title={t('tripDetail.cancel')}
-                        variant="square"
-                        size="sm"
-                        onPress={cancelReorderMode}
-                      />
-                      <SecondaryButton
-                        title={t('tripDetail.ok')}
-                        leftIcon="check-line"
-                        variant="square"
-                        size="sm"
-                        active
-                        onPress={confirmReorder}
-                        disabled={isSavingOrder}
-                      />
-                    </View>
-                  )}
-                </View>
-              )}
-              {/* Category Filters with SecondaryButton - hide in reorder mode */}
-              {showFilters && !isReordering && (
+        {/* Filters and Reorder button (fixed, not scrollable) - only in highlights tab */}
+        {activeTab === 'highlights' && (showFilters || highlights.length > 1) && (
+          <View className="px-4 mt-4 mb-6" style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            {/* Category Filters - left side */}
+            {showFilters && !isReordering && (
+              <View style={{ flex: 1 }}>
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{ gap: 8, paddingBottom: 16 }}
+                  contentContainerStyle={{ gap: 8 }}
                 >
                   {/* Must See Filter */}
                   {mustSeeCount > 0 && (
@@ -801,8 +769,68 @@ export default function CityDetailPage() {
                     );
                   })}
                 </ScrollView>
-              )}
+              </View>
+            )}
 
+            {/* Reorder button - right side */}
+            {highlights.length > 1 && (
+              <View>
+                {!isReordering ? (
+                  <SecondaryButton
+                    title={t('tripDetail.reorder')}
+                    variant="square"
+                    size="sm"
+                    leftIcon="draggable"
+                    onPress={enterReorderMode}
+                  />
+                ) : (
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <SecondaryButton
+                      title={t('tripDetail.cancel')}
+                      variant="square"
+                      size="sm"
+                      onPress={cancelReorderMode}
+                    />
+                    <SecondaryButton
+                      title={t('tripDetail.ok')}
+                      leftIcon="check-line"
+                      variant="square"
+                      size="sm"
+                      active
+                      onPress={confirmReorder}
+                      disabled={isSavingOrder}
+                    />
+                  </View>
+                )}
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Tab Content */}
+        <Animated.ScrollView
+          ref={outerScrollRef}
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingBottom: insets.bottom + 280, paddingTop: 24 }}
+          showsVerticalScrollIndicator={false}
+          scrollEventThrottle={16}
+          onLayout={(e) => {
+            scrollViewHeight.current = e.nativeEvent.layout.height;
+          }}
+          onContentSizeChange={(_, h) => {
+            scrollContentHeight.current = h;
+          }}
+          onScroll={(e: any) => {
+            const y = e.nativeEvent.contentOffset.y;
+            const isScrollable = scrollContentHeight.current > scrollViewHeight.current;
+            const effectiveY = isScrollable ? Math.max(0, y) : 0;
+            scrollY.setValue(effectiveY);
+            scrollYJS.setValue(effectiveY);
+          }}
+        >
+          {/* Highlights Tab */}
+          {activeTab === 'highlights' && (
+            <View style={{ paddingHorizontal: 16 }}>
               {/* TicketCard List or Reorder List */}
               {isReordering ? (
                 /* Reorder mode with DraggableFlatList */

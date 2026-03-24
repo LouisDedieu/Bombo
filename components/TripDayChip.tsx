@@ -274,7 +274,11 @@ const SelectorChip = memo(function SelectorChip({
       style={[animatedStyle, style]}
     >
       <View style={[styles.chipBase, styles.chipLarge, { backgroundColor: bgColor }]}>
-        <Text style={[styles.textLarge, { color: labelColor }]}>
+        <Text
+          style={[styles.textLarge, { color: labelColor }]}
+          numberOfLines={1}
+          ellipsizeMode="clip"
+        >
           {t('tripDayChip.day', { number: dayNumber })}
         </Text>
         <Badge count={count} size="large" textColor={badgeText} bgColor={badgeBg} />

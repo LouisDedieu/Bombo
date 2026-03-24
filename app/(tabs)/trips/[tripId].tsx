@@ -224,10 +224,12 @@ export default function TripDetailPage() {
 
   const SCREEN_HEIGHT = Dimensions.get('window').height;
   const MAP_DEFAULT_HEIGHT = 300;
+  const MAP_COLLAPSED_HEIGHT = 180; // reduced height when scrolling down
   const MAP_EXPANDED_HEIGHT = SCREEN_HEIGHT - 120; // leave room for status bar + close button
 
   const mapExpandAnim = useRef(new Animated.Value(MAP_DEFAULT_HEIGHT)).current;
   const mapGradientOpacity = useRef(new Animated.Value(1)).current;
+  const mapExpandMultiplier = useRef(new Animated.Value(1)).current; // 1 = follow scroll, 0 = ignore scroll (when expanded)
 
   const toggleMapExpanded = useCallback(() => {
     const expanding = !isMapExpanded;
@@ -241,7 +243,12 @@ export default function TripDetailPage() {
         useNativeDriver: false,
       }),
       Animated.timing(mapGradientOpacity, {
-        toValue: expanding ? 0 : 1,
+        toValue: expanding ? 0.5 : 1,
+        duration: 250,
+        useNativeDriver: false,
+      }),
+      Animated.timing(mapExpandMultiplier, {
+        toValue: expanding ? 0 : 1, // disable scroll effect when expanded
         duration: 250,
         useNativeDriver: false,
       }),
@@ -252,10 +259,23 @@ export default function TripDetailPage() {
   // Une seule valeur suffit — useNativeDriver: false car 'height' n'est pas supporté native.
   const scrollY = useRef(new Animated.Value(0)).current;
   const outerScrollRef = useRef<Animated.ScrollView>(null);
-  const [headerHeight, setHeaderHeight] = useState(620);
+  const [headerHeight, setHeaderHeight] = useState(650);
   const headerMeasured = useRef(false);
 
-  const COLLAPSE_RANGE = 60;
+  const COLLAPSE_RANGE = 110;
+
+  // Map height reduction on scroll: reduces from 0 to -120px as user scrolls down
+  const mapScrollDelta = scrollY.interpolate({
+    inputRange: [0, COLLAPSE_RANGE],
+    outputRange: [0, -(MAP_DEFAULT_HEIGHT - MAP_COLLAPSED_HEIGHT)], // 0 to -120
+    extrapolate: 'clamp',
+  });
+
+  // Combine expand animation with scroll collapse (scroll effect disabled when expanded)
+  const finalMapHeight = Animated.add(
+    mapExpandAnim,
+    Animated.multiply(mapScrollDelta, mapExpandMultiplier)
+  );
 
   // Le top du ScrollView suit la réduction du header
   const scrollContainerTop = scrollY.interpolate({
@@ -505,8 +525,8 @@ export default function TripDetailPage() {
             }}
           >
 
-            {/* HERO MAP — animated height expand/collapse */}
-            <Animated.View style={{ width: '100%', height: mapExpandAnim }}>
+            {/* HERO MAP — animated height expand/collapse + scroll collapse */}
+            <Animated.View style={{ width: '100%', height: finalMapHeight }}>
               {/* Map - TripMap for overview, CityMap for daily mode */}
               {viewMode === 'daily' && selectedDay && selectedDayHighlights.length > 0 ? (
                 <CityMap
@@ -544,7 +564,7 @@ export default function TripDetailPage() {
                   bottom: 0,
                   left: 0,
                   right: 0,
-                  height: 50,
+                  height: 20,
                   opacity: mapGradientOpacity,
                   overflow: 'hidden',
                 }}
@@ -710,6 +730,67 @@ export default function TripDetailPage() {
               />
             </View>
 
+            {/* Section header: ETAPES DU VOYAGE + Reorder button (fixed, not scrollable) */}
+            {activeTab === 'itinerary' && viewMode === 'overview' && (
+              <View className="flex-row items-center justify-between px-4 mt-4 mb-2">
+                <Text style={{
+                  fontFamily: 'DM Sans',
+                  fontWeight: '600',
+                  fontSize: 12,
+                  color: 'rgba(255, 255, 255, 0.5)',
+                  letterSpacing: 1,
+                }}>
+                  {t('tripDetail.tripSteps').toUpperCase()}
+                </Text>
+                {!isEditingOrder ? (
+                  <SecondaryButton
+                    title={t('tripDetail.reorder')}
+                    variant="square"
+                    size="sm"
+                    leftIcon="draggable"
+                    onPress={enterEditMode}
+                  />
+                ) : (
+                  <View className="row-center">
+                    <SecondaryButton title={t('tripDetail.cancel')} variant="square" size="sm" onPress={cancelEditMode} />
+                    <SecondaryButton
+                      title={t('tripDetail.ok')}
+                      leftIcon="check-line"
+                      variant="square"
+                      size="sm"
+                      active={true}
+                      onPress={confirmOrder}
+                      disabled={isSavingOrder}
+                    />
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* Day selector chips (fixed, not scrollable) - only in daily mode */}
+            {activeTab === 'itinerary' && viewMode === 'daily' && days.length > 0 && (
+              <View style={{ height: 40, marginTop: 16 }}>
+                <View className="px-4">
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ gap: 8, paddingBottom: 16 }}
+                  >
+                    {days.map((day) => (
+                      <TripDayChip
+                        key={day.id}
+                        variant="selector"
+                        dayNumber={day.day_number}
+                        count={day.spots?.length || 0}
+                        isSelected={selectedDayNumber === day.day_number}
+                        onPress={() => setSelectedDayNumber(day.day_number)}
+                      />
+                    ))}
+                  </ScrollView>
+                </View>
+              </View>
+            )}
+
           </Animated.View>{/* end absolute header */}
 
           {/* ── TAB CONTENT — démarre sous le header, overflow hidden pour clipper le contenu ── */}
@@ -728,46 +809,11 @@ export default function TripDetailPage() {
 
               {/* ─────────────────── ITINERARY ─────────────────── */}
               {activeTab === 'itinerary' && (
-                <View className="pb-6 px-4 pt-4" style={{minHeight: SCREEN_HEIGHT - headerHeight + COLLAPSE_RANGE}}>
+                <View className="pb-6 px-4 pt-2" style={{minHeight: SCREEN_HEIGHT - headerHeight + COLLAPSE_RANGE}}>
 
                   {/* ═══════════════════ OVERVIEW MODE ═══════════════════ */}
                   {viewMode === 'overview' && (
                     <>
-                      {/* Section header: ETAPES DU VOYAGE + Reorder button */}
-                      <View className="flex-row items-center justify-between mb-4">
-                        <Text style={{
-                          fontFamily: 'DM Sans',
-                          fontWeight: '600',
-                          fontSize: 12,
-                          color: 'rgba(255, 255, 255, 0.5)',
-                          letterSpacing: 1,
-                        }}>
-                          {t('tripDetail.tripSteps').toUpperCase()}
-                        </Text>
-                        {!isEditingOrder ? (
-                          <SecondaryButton
-                            title={t('tripDetail.reorder')}
-                            variant="square"
-                            size="sm"
-                            leftIcon="draggable"
-                            onPress={enterEditMode}
-                          />
-                        ) : (
-                          <View className="row-center">
-                            <SecondaryButton title={t('tripDetail.cancel')} variant="square" size="sm" onPress={cancelEditMode} />
-                            <SecondaryButton
-                              title={t('tripDetail.ok')}
-                              leftIcon="check-line"
-                              variant="square"
-                              size="sm"
-                              active={true}
-                              onPress={confirmOrder}
-                              disabled={isSavingOrder}
-                            />
-                          </View>
-                        )}
-                      </View>
-
                       {/* Mode normal - TripStepCards */}
                       {!isEditingOrder && (
                         <View style={{ gap: 12 }}>
@@ -911,27 +957,6 @@ export default function TripDetailPage() {
                   {/* ═══════════════════ DAILY MODE ═══════════════════ */}
                   {viewMode === 'daily' && (
                     <>
-                      {/* Day selector chips */}
-                      {days.length > 0 && (
-                        <ScrollView
-                          horizontal
-                          showsHorizontalScrollIndicator={false}
-                          contentContainerStyle={{ gap: 8, paddingBottom: 16 }}
-                          style={{ marginHorizontal: -16, paddingHorizontal: 16 }}
-                        >
-                          {days.map((day) => (
-                            <TripDayChip
-                              key={day.id}
-                              variant="selector"
-                              dayNumber={day.day_number}
-                              count={day.spots?.length || 0}
-                              isSelected={selectedDayNumber === day.day_number}
-                              onPress={() => setSelectedDayNumber(day.day_number)}
-                            />
-                          ))}
-                        </ScrollView>
-                      )}
-
                       {/* Day content */}
                       {selectedDayNumber && (() => {
                         const selectedDay = days.find(d => d.day_number === selectedDayNumber);
