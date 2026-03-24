@@ -81,7 +81,10 @@ export function detectPlatform(url: string): Platform {
   if (/tiktok\.com/i.test(url)) return 'tiktok';
   if (/instagram\.com/i.test(url)) return 'instagram';
   if (/medium\.com|substack\.com|wordpress\.com|blogspot\.com/i.test(url)) return 'blog';
-  if (/\/blog\/|\/article\//i.test(url)) return 'blog';
+  if (/\/blog\/|\/article\/|\/post\//i.test(url)) return 'blog';
+  if (/\.be\/|\.fr\/|\.it\/|\/es\/|\.com\/[a-z]{2,}\//i.test(url) && !/\/video\/|\/reel\/|\/ reels\//i.test(url)) return 'blog';
+  if (/\/visiter-|\/guide-|\/itinerary|\/citytrip|\/weekend-|\/day-|\/que-faire-/i.test(url)) return 'blog';
+  if (/\/travel-guide|\/things-to-do|\/best-of|\/top-10|\/itinerary|\/visit-|\/guide-to|\/travel-tips|\/weekend-guide|\/city-guide|\/travel-blog/i.test(url)) return 'blog';
   return 'unknown';
 }
 
