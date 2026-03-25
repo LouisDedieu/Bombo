@@ -467,6 +467,7 @@
     "departure": "Departure",
     "arrival": "Arrival",
     "plane": "Flight",
+    "avion": "Airplane",
     "train": "Train",
     "bus": "Bus",
     "car": "Car",
@@ -523,7 +524,8 @@
       "internal": "An internal error occurred",
       "unavailable": "Service temporarily unavailable",
       "database": "Database error",
-      "externalServiceError": "External service error"
+      "externalServiceError": "External service error",
+      "high_demand": "AI model is experiencing high demand. Please try again in a few minutes ⏱️"
     }
   }
 }

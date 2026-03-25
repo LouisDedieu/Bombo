@@ -465,6 +465,7 @@
     "departure": "Départ",
     "arrival": "Arrivée",
     "plane": "Vol",
+    "avion": "Avion",
     "train": "Train",
     "bus": "Bus",
     "car": "Voiture",
@@ -521,7 +522,8 @@
       "internal": "Une erreur interne s'est produite",
       "unavailable": "Service temporairement indisponible",
       "database": "Erreur de base de données",
-      "externalServiceError": "Erreur d'un service externe"
+      "externalServiceError": "Erreur d'un service externe",
+      "high_demand": "Le modèle d'IA est surchargé. Réessayez dans quelques minutes ⏱️"
     }
   }
 }
