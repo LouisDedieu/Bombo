@@ -386,7 +386,7 @@ export default function Login() {
                   ) : (
                     <>
                       <Icon name="refresh-line" size={16} color="#8b8bf5" />
-                      <Text className="text-accent text-[13px] font-medium font-dmsans">{t('auth.resendConfirmationEmail')}</Text>
+                      <Text className="text-[#8b8bf5] text-[13px] font-medium font-dmsans">{t('auth.resendConfirmationEmail')}</Text>
                     </>
                   )}
                 </TouchableOpacity>
