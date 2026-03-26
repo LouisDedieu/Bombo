@@ -10,6 +10,7 @@ import {
   ScrollView, ImageBackground,
 } from 'react-native';
 import Loader from '@/components/Loader';
+import { PrimaryButton } from '@/components/PrimaryButton';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Icon from 'react-native-remix-icon';
@@ -400,35 +401,15 @@ export default function ProfilePage() {
 
         {/* ── Déconnexion ── */}
         <View>
-          <TouchableOpacity
+          <PrimaryButton
+            title={t('profile.signOut')}
+            leftIcon="logout-box-line"
+            color="red"
+            fullWidth
+            loading={signing}
+            disabled={!user || isTestMode}
             onPress={handleSignOut}
-            disabled={signing || isTestMode}
-            style={{
-              width: '100%',
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8,
-              borderWidth: 1,
-              borderColor: 'rgb(166,60,60)',
-              borderRadius: 12,
-              paddingVertical: 14,
-              opacity: signing || isTestMode ? 0.4 : 1,
-            }}
-            activeOpacity={0.7}
-          >
-            {signing ? (
-              <>
-                <Loader size={20} color="rgba(255, 255, 255, 0.5)" />
-                <Text className="font-dmsans" style={{ color: 'rgb(166,60,60)', fontWeight: '500' }}>{t('profile.signingOut')}</Text>
-              </>
-            ) : (
-              <>
-                <Icon name="logout-box-line" size={16} color="rgb(255,82,82)" />
-                <Text className="font-dmsans" style={{ color: 'rgb(255,82,82)', fontWeight: '500' }}>{t('profile.signOut')}</Text>
-              </>
-            )}
-          </TouchableOpacity>
+          />
 
           {isTestMode && (
             <Text className="font-dmsans" style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.4)', textAlign: 'center', marginTop: 8 }}>
